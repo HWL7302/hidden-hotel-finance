@@ -14,3 +14,12 @@
 - Added documentation files.
 - Added `supabase/schema.sql`.
 - Added `.env.example` and `.gitignore`.
+
+## 2026-05-30
+
+- Started Phase 2A.
+- Implemented income management CRUD using the Supabase `incomes` table.
+- Added income month filtering.
+- Added single-record delete with browser confirmation.
+- Added page-level Supabase error display for income read, create, update, and delete failures.
+- Preserved existing login logic, Supabase Auth configuration, middleware, dashboard shell, and database schema.
