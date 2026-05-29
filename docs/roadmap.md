@@ -2,11 +2,16 @@
 
 ## Phase 1
 
-Project foundation, Supabase Auth login, dashboard shell, module placeholders, database schema, documentation.
+- Project foundation
+- Supabase Auth login
+- Dashboard shell
+- Module placeholders
+- Database schema
+- Documentation
 
 ## Phase 2
 
-- Implement income CRUD
+- Implement income CRUD: completed in Phase 2A
 - Implement expense CRUD
 - Implement evidence upload to Supabase Storage
 - Add role-aware navigation and access checks
@@ -15,4 +20,10 @@ Project foundation, Supabase Auth login, dashboard shell, module placeholders, d
 
 ## Later Phases
 
-Monthly locking workflow, audit-log-backed locked month edits, dividend calculation, report export, Excel import, PDF export, analytics and charts.
+- Monthly locking workflow
+- Audit-log-backed locked month edits
+- Dividend calculation
+- Report export
+- Excel import
+- PDF export
+- Better analytics and charts
