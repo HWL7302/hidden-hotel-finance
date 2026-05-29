@@ -1,2 +1,49 @@
-import { ModulePlaceholder } from "@/components/ModulePlaceholder";
-export default function IncomePage() { return <ModulePlaceholder title="收入管理" description="记录电竞酒店经营收入。Phase 1 保留门店字段和凭证关联入口，暂不实现完整 CRUD。" />; }
+import { IncomeManager } from "@/components/IncomeManager";
+import { createClient } from "@/lib/supabase-server";
+
+export default async function IncomePage() {
+  const supabase = await createClient();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+
+  let defaultStoreId: string | null = null;
+  let storeLoadError = "";
+
+  if (user) {
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("store_id")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (profileError) {
+      storeLoadError = profileError.message;
+    }
+
+    defaultStoreId = profile?.store_id ?? null;
+
+    if (!defaultStoreId) {
+      const { data: stores, error: storesError } = await supabase
+        .from("stores")
+        .select("id")
+        .eq("is_active", true)
+        .order("created_at", { ascending: true })
+        .limit(1);
+
+      if (storesError) {
+        storeLoadError = storesError.message;
+      }
+
+      defaultStoreId = stores?.[0]?.id ?? null;
+    }
+  }
+
+  return (
+    <IncomeManager
+      currentUserId={user?.id ?? ""}
+      defaultStoreId={defaultStoreId}
+      storeLoadError={storeLoadError}
+    />
+  );
+}
