@@ -61,9 +61,19 @@ http://localhost:3000
 - Delete single income with browser confirmation
 - `created_by` and default `store_id` handling
 
+### Phase 2B
+
+- Restored income management dashboard card and table layout
+- Expense management page backed by the Supabase `expenses` table
+- Expense list
+- Month filter
+- Create expense
+- Edit expense
+- Delete single expense with browser confirmation
+- `created_by` and default `store_id` handling
+
 ## Not Included Yet
 
-- Expense CRUD
 - Evidence upload
 - Monthly closing
 - Dividend calculation
