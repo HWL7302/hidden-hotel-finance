@@ -12,7 +12,7 @@
 ## Phase 2
 
 - Implement income CRUD: completed in Phase 2A
-- Implement expense CRUD
+- Implement expense CRUD: completed in Phase 2B
 - Implement evidence upload to Supabase Storage
 - Add role-aware navigation and access checks
 - Add basic monthly closing list and detail pages
