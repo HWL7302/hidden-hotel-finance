@@ -1,2 +1,49 @@
-import { ModulePlaceholder } from "@/components/ModulePlaceholder";
-export default function ExpensesPage() { return <ModulePlaceholder title="支出管理" description="记录运营支出、成本和费用，金额字段在数据库中使用 numeric 类型。" />; }
+import { ExpenseManager } from "@/components/ExpenseManager";
+import { createClient } from "@/lib/supabase-server";
+
+export default async function ExpensesPage() {
+  const supabase = await createClient();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+
+  let defaultStoreId: string | null = null;
+  let storeLoadError = "";
+
+  if (user) {
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("store_id")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (profileError) {
+      storeLoadError = profileError.message;
+    }
+
+    defaultStoreId = profile?.store_id ?? null;
+
+    if (!defaultStoreId) {
+      const { data: stores, error: storesError } = await supabase
+        .from("stores")
+        .select("id")
+        .eq("is_active", true)
+        .order("created_at", { ascending: true })
+        .limit(1);
+
+      if (storesError) {
+        storeLoadError = storesError.message;
+      }
+
+      defaultStoreId = stores?.[0]?.id ?? null;
+    }
+  }
+
+  return (
+    <ExpenseManager
+      currentUserId={user?.id ?? ""}
+      defaultStoreId={defaultStoreId}
+      storeLoadError={storeLoadError}
+    />
+  );
+}
