@@ -3,38 +3,39 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase-client";
 
-type IncomeStatus = "draft" | "confirmed" | "locked" | "void";
-
 type IncomeRecord = {
   id: string;
   store_id: string;
-  income_date: string;
-  category: string;
-  amount: string | number;
-  payment_method: string | null;
-  description: string | null;
-  status: IncomeStatus;
+  date: string;
+  source: string;
+  gross_amount: string | number;
+  fee_amount: string | number | null;
+  net_amount: string | number | null;
+  settlement_period: string | null;
+  note: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
 };
 
 type IncomeFormState = {
-  incomeDate: string;
-  category: string;
-  amount: string;
-  paymentMethod: string;
-  description: string;
-  status: IncomeStatus;
+  date: string;
+  source: string;
+  grossAmount: string;
+  feeAmount: string;
+  netAmount: string;
+  settlementPeriod: string;
+  note: string;
 };
 
 const emptyForm: IncomeFormState = {
-  incomeDate: new Date().toISOString().slice(0, 10),
-  category: "",
-  amount: "",
-  paymentMethod: "",
-  description: "",
-  status: "draft"
+  date: new Date().toISOString().slice(0, 10),
+  source: "",
+  grossAmount: "",
+  feeAmount: "",
+  netAmount: "",
+  settlementPeriod: "",
+  note: ""
 };
 
 function currentMonthValue() {
@@ -51,13 +52,21 @@ function getMonthRange(month: string) {
   };
 }
 
-function formatMoney(value: string | number) {
+function formatMoney(value: string | number | null) {
+  if (value === null || value === "") {
+    return "-";
+  }
+
   const text = String(value);
   const [integerPart, decimalPart = "00"] = text.split(".");
   return `${integerPart}.${decimalPart.padEnd(2, "0").slice(0, 2)}`;
 }
 
-function validateAmount(value: string) {
+function validateOptionalAmount(value: string) {
+  if (!value) {
+    return true;
+  }
+
   return /^(0|[1-9]\d*)(\.\d{1,2})?$/.test(value);
 }
 
@@ -89,11 +98,11 @@ export function IncomeManager({
     let query = supabase
       .from("incomes")
       .select(
-        "id,store_id,income_date,category,amount,payment_method,description,status,created_by,created_at,updated_at"
+        "id,store_id,date,source,gross_amount,fee_amount,net_amount,settlement_period,note,created_by,created_at,updated_at"
       )
-      .gte("income_date", range.start)
-      .lt("income_date", range.end)
-      .order("income_date", { ascending: false })
+      .gte("date", range.start)
+      .lt("date", range.end)
+      .order("date", { ascending: false })
       .order("created_at", { ascending: false });
 
     if (defaultStoreId) {
@@ -125,18 +134,19 @@ export function IncomeManager({
 
   function resetForm() {
     setEditingId(null);
-    setForm({ ...emptyForm, incomeDate: `${month}-01` });
+    setForm({ ...emptyForm, date: `${month}-01` });
   }
 
   function startEdit(income: IncomeRecord) {
     setEditingId(income.id);
     setForm({
-      incomeDate: income.income_date,
-      category: income.category,
-      amount: String(income.amount),
-      paymentMethod: income.payment_method ?? "",
-      description: income.description ?? "",
-      status: income.status
+      date: income.date,
+      source: income.source,
+      grossAmount: String(income.gross_amount ?? ""),
+      feeAmount: String(income.fee_amount ?? ""),
+      netAmount: String(income.net_amount ?? ""),
+      settlementPeriod: income.settlement_period ?? "",
+      note: income.note ?? ""
     });
     setError("");
     setNotice("");
@@ -157,7 +167,16 @@ export function IncomeManager({
       return;
     }
 
-    if (!validateAmount(form.amount)) {
+    if (!form.grossAmount) {
+      setError("请输入收入总额。");
+      return;
+    }
+
+    if (
+      !validateOptionalAmount(form.grossAmount) ||
+      !validateOptionalAmount(form.feeAmount) ||
+      !validateOptionalAmount(form.netAmount)
+    ) {
       setError("金额格式不正确，请输入最多两位小数的非负金额。");
       return;
     }
@@ -166,12 +185,13 @@ export function IncomeManager({
 
     const payload = {
       store_id: defaultStoreId,
-      income_date: form.incomeDate,
-      category: form.category.trim(),
-      amount: form.amount,
-      payment_method: form.paymentMethod.trim() || null,
-      description: form.description.trim() || null,
-      status: form.status,
+      date: form.date,
+      source: form.source.trim(),
+      gross_amount: form.grossAmount,
+      fee_amount: form.feeAmount || null,
+      net_amount: form.netAmount || null,
+      settlement_period: form.settlementPeriod.trim() || null,
+      note: form.note.trim() || null,
       created_by: currentUserId
     };
 
@@ -179,12 +199,13 @@ export function IncomeManager({
       ? await supabase
           .from("incomes")
           .update({
-            income_date: payload.income_date,
-            category: payload.category,
-            amount: payload.amount,
-            payment_method: payload.payment_method,
-            description: payload.description,
-            status: payload.status
+            date: payload.date,
+            source: payload.source,
+            gross_amount: payload.gross_amount,
+            fee_amount: payload.fee_amount,
+            net_amount: payload.net_amount,
+            settlement_period: payload.settlement_period,
+            note: payload.note
           })
           .eq("id", editingId)
       : await supabase.from("incomes").insert(payload);
@@ -203,7 +224,7 @@ export function IncomeManager({
 
   async function handleDelete(income: IncomeRecord) {
     const confirmed = window.confirm(
-      `确认删除 ${income.income_date} 的收入记录「${income.category}」吗？`
+      `确认删除 ${income.date} 的收入记录「${income.source}」吗？`
     );
 
     if (!confirmed) {
@@ -274,71 +295,79 @@ export function IncomeManager({
               <input
                 type="date"
                 required
-                value={form.incomeDate}
-                onChange={(event) => updateForm("incomeDate", event.target.value)}
+                value={form.date}
+                onChange={(event) => updateForm("date", event.target.value)}
                 className="mt-2 w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-pine focus:ring-2 focus:ring-pine/20"
               />
             </label>
 
             <label className="block text-sm font-medium text-ink">
-              分类
+              来源
               <input
                 type="text"
                 required
-                value={form.category}
-                onChange={(event) => updateForm("category", event.target.value)}
+                value={form.source}
+                onChange={(event) => updateForm("source", event.target.value)}
                 placeholder="例如：客房收入、饮品收入"
                 className="mt-2 w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-pine focus:ring-2 focus:ring-pine/20"
               />
             </label>
 
             <label className="block text-sm font-medium text-ink">
-              金额
+              收入总额
               <input
                 type="text"
                 required
                 inputMode="decimal"
-                value={form.amount}
-                onChange={(event) => updateForm("amount", event.target.value)}
+                value={form.grossAmount}
+                onChange={(event) => updateForm("grossAmount", event.target.value)}
                 placeholder="0.00"
                 className="mt-2 w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-pine focus:ring-2 focus:ring-pine/20"
               />
             </label>
 
             <label className="block text-sm font-medium text-ink">
-              支付方式
+              手续费
               <input
                 type="text"
-                value={form.paymentMethod}
-                onChange={(event) =>
-                  updateForm("paymentMethod", event.target.value)
-                }
-                placeholder="例如：现金、微信、支付宝"
+                inputMode="decimal"
+                value={form.feeAmount}
+                onChange={(event) => updateForm("feeAmount", event.target.value)}
+                placeholder="0.00"
                 className="mt-2 w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-pine focus:ring-2 focus:ring-pine/20"
               />
             </label>
 
             <label className="block text-sm font-medium text-ink">
-              状态
-              <select
-                value={form.status}
-                onChange={(event) =>
-                  updateForm("status", event.target.value as IncomeStatus)
-                }
+              净收入
+              <input
+                type="text"
+                inputMode="decimal"
+                value={form.netAmount}
+                onChange={(event) => updateForm("netAmount", event.target.value)}
+                placeholder="0.00"
                 className="mt-2 w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-pine focus:ring-2 focus:ring-pine/20"
-              >
-                <option value="draft">草稿</option>
-                <option value="confirmed">已确认</option>
-                <option value="locked">已锁定</option>
-                <option value="void">作废</option>
-              </select>
+              />
             </label>
 
             <label className="block text-sm font-medium text-ink">
-              说明
+              结算周期
+              <input
+                type="text"
+                value={form.settlementPeriod}
+                onChange={(event) =>
+                  updateForm("settlementPeriod", event.target.value)
+                }
+                placeholder="例如：2026-05"
+                className="mt-2 w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-pine focus:ring-2 focus:ring-pine/20"
+              />
+            </label>
+
+            <label className="block text-sm font-medium text-ink">
+              备注
               <textarea
-                value={form.description}
-                onChange={(event) => updateForm("description", event.target.value)}
+                value={form.note}
+                onChange={(event) => updateForm("note", event.target.value)}
                 rows={3}
                 placeholder="凭证上传将在后续阶段实现。"
                 className="mt-2 w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-pine focus:ring-2 focus:ring-pine/20"
@@ -383,24 +412,25 @@ export function IncomeManager({
               <thead className="bg-stone-50 text-left text-stone-600">
                 <tr>
                   <th className="px-4 py-3 font-semibold">日期</th>
-                  <th className="px-4 py-3 font-semibold">分类</th>
-                  <th className="px-4 py-3 font-semibold">金额</th>
-                  <th className="px-4 py-3 font-semibold">支付方式</th>
-                  <th className="px-4 py-3 font-semibold">状态</th>
-                  <th className="px-4 py-3 font-semibold">说明</th>
+                  <th className="px-4 py-3 font-semibold">来源</th>
+                  <th className="px-4 py-3 font-semibold">收入总额</th>
+                  <th className="px-4 py-3 font-semibold">手续费</th>
+                  <th className="px-4 py-3 font-semibold">净收入</th>
+                  <th className="px-4 py-3 font-semibold">结算周期</th>
+                  <th className="px-4 py-3 font-semibold">备注</th>
                   <th className="px-4 py-3 font-semibold">操作</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
                 {isLoading ? (
                   <tr>
-                    <td className="px-4 py-6 text-stone-500" colSpan={7}>
+                    <td className="px-4 py-6 text-stone-500" colSpan={8}>
                       正在读取收入数据...
                     </td>
                   </tr>
                 ) : incomes.length === 0 ? (
                   <tr>
-                    <td className="px-4 py-6 text-stone-500" colSpan={7}>
+                    <td className="px-4 py-6 text-stone-500" colSpan={8}>
                       当前月份暂无收入记录。
                     </td>
                   </tr>
@@ -408,22 +438,25 @@ export function IncomeManager({
                   incomes.map((income) => (
                     <tr key={income.id}>
                       <td className="whitespace-nowrap px-4 py-3 text-stone-700">
-                        {income.income_date}
+                        {income.date}
                       </td>
                       <td className="px-4 py-3 font-medium text-ink">
-                        {income.category}
+                        {income.source}
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-stone-700">
-                        {formatMoney(income.amount)}
+                        {formatMoney(income.gross_amount)}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-stone-700">
+                        {formatMoney(income.fee_amount)}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-stone-700">
+                        {formatMoney(income.net_amount)}
                       </td>
                       <td className="px-4 py-3 text-stone-700">
-                        {income.payment_method || "-"}
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-stone-700">
-                        {income.status}
+                        {income.settlement_period || "-"}
                       </td>
                       <td className="min-w-48 px-4 py-3 text-stone-700">
-                        {income.description || "-"}
+                        {income.note || "-"}
                       </td>
                       <td className="whitespace-nowrap px-4 py-3">
                         <div className="flex gap-2">

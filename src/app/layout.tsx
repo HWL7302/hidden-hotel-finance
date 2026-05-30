@@ -1,8 +1,19 @@
 import type { Metadata } from "next";
 import "./globals.css";
 
-export const metadata: Metadata = { title: "Hidden Hotel Finance", description: "电竞酒店财务记账与分红管理系统" };
+export const metadata: Metadata = {
+  title: "Hidden Hotel Finance",
+  description: "电竞酒店财务记账与分红管理系统"
+};
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="zh-CN"><body>{children}</body></html>;
+export default function RootLayout({
+  children
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
+  return (
+    <html lang="zh-CN">
+      <body>{children}</body>
+    </html>
+  );
 }
