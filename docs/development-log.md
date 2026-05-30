@@ -23,3 +23,10 @@
 - Added single-record delete with browser confirmation.
 - Added page-level Supabase error display for income read, create, update, and delete failures.
 - Preserved existing login logic, Supabase Auth configuration, middleware, dashboard shell, and database schema.
+- Started Phase 2B.
+- Confirmed the real Supabase `expenses` fields: `date`, `category`, `amount`, `payee`, `payment_method`, `included_in_monthly_cost`, and `note`.
+- Implemented expense management CRUD using the Supabase `expenses` table.
+- Added expense month filtering.
+- Added single-record delete with browser confirmation.
+- Added RLS and grant SQL for `expenses` alongside the existing `profiles`, `stores`, and `incomes` access chain.
+- Kept login logic, Supabase Auth, middleware, and other modules unchanged.
