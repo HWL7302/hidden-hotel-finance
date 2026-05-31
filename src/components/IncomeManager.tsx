@@ -38,6 +38,14 @@ const emptyForm: IncomeFormState = {
   note: ""
 };
 
+const incomeSourceOptions = [
+  { value: "meituan", label: "美团" },
+  { value: "douyin", label: "抖音" },
+  { value: "wechat_offline", label: "微信线下" },
+  { value: "long_stay", label: "长住/月租" },
+  { value: "other", label: "其他" }
+];
+
 function currentMonthValue() {
   return new Date().toISOString().slice(0, 7);
 }
@@ -145,7 +153,7 @@ export function IncomeManager({
       grossAmount: String(income.gross_amount ?? ""),
       feeAmount: String(income.fee_amount ?? ""),
       netAmount: String(income.net_amount ?? ""),
-      settlementPeriod: income.settlement_period ?? "",
+      settlementPeriod: income.settlement_period?.slice(0, 7) ?? "",
       note: income.note ?? ""
     });
     setError("");
@@ -190,7 +198,7 @@ export function IncomeManager({
       gross_amount: form.grossAmount,
       fee_amount: form.feeAmount || null,
       net_amount: form.netAmount || null,
-      settlement_period: form.settlementPeriod.trim() || null,
+      settlement_period: `${form.settlementPeriod}-01`,
       note: form.note.trim() || null,
       created_by: currentUserId
     };
@@ -303,14 +311,19 @@ export function IncomeManager({
 
             <label className="block text-sm font-medium text-ink">
               来源
-              <input
-                type="text"
+              <select
                 required
                 value={form.source}
                 onChange={(event) => updateForm("source", event.target.value)}
-                placeholder="例如：客房收入、饮品收入"
                 className="mt-2 w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-pine focus:ring-2 focus:ring-pine/20"
-              />
+              >
+                <option value="">请选择来源</option>
+                {incomeSourceOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
             </label>
 
             <label className="block text-sm font-medium text-ink">
@@ -353,12 +366,12 @@ export function IncomeManager({
             <label className="block text-sm font-medium text-ink">
               结算周期
               <input
-                type="text"
+                type="month"
+                required
                 value={form.settlementPeriod}
                 onChange={(event) =>
                   updateForm("settlementPeriod", event.target.value)
                 }
-                placeholder="例如：2026-05"
                 className="mt-2 w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-pine focus:ring-2 focus:ring-pine/20"
               />
             </label>

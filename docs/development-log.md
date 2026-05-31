@@ -30,3 +30,13 @@
 - Added single-record delete with browser confirmation.
 - Added RLS and grant SQL for `expenses` alongside the existing `profiles`, `stores`, and `incomes` access chain.
 - Kept login logic, Supabase Auth, middleware, and other modules unchanged.
+
+## 2026-05-31
+
+- Audited GitHub `main`, local environment usage, and exported Supabase metadata.
+- Replaced the stale local schema snapshot with the live Supabase table, enum, constraint, index, and core access-chain definitions.
+- Added a core access reconciliation SQL script for `profiles`, `stores`, `incomes`, and `expenses`.
+- Changed income source and expense category inputs to enum-backed selects.
+- Changed expense payment method to a fixed select while preserving its database `text` type.
+- Reconciled the live Supabase access chain for `profiles`, `stores`, `incomes`, and `expenses`.
+- Added cross-device restore, database audit, and read-only verification guidance.

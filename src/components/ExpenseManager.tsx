@@ -38,6 +38,21 @@ const emptyForm: ExpenseFormState = {
   note: ""
 };
 
+const expenseCategoryOptions = [
+  { value: "rent", label: "房租" },
+  { value: "salary", label: "工资" },
+  { value: "utilities", label: "水电" },
+  { value: "network", label: "网络" },
+  { value: "game_membership", label: "游戏会员" },
+  { value: "cleaning_supplies", label: "清洁耗材" },
+  { value: "repair", label: "维修" },
+  { value: "platform_promotion", label: "平台推广" },
+  { value: "renovation_equipment", label: "装修设备" },
+  { value: "other", label: "其他" }
+];
+
+const paymentMethodOptions = ["微信", "支付宝", "现金", "银行转账", "其他"];
+
 function currentMonthValue() {
   return new Date().toISOString().slice(0, 7);
 }
@@ -290,14 +305,19 @@ export function ExpenseManager({
 
             <label className="block text-sm font-medium text-ink">
               分类
-              <input
-                type="text"
+              <select
                 required
                 value={form.category}
                 onChange={(event) => updateForm("category", event.target.value)}
-                placeholder="例如：房租、水电、耗材"
                 className="mt-2 w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-pine focus:ring-2 focus:ring-pine/20"
-              />
+              >
+                <option value="">请选择分类</option>
+                {expenseCategoryOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
             </label>
 
             <label className="block text-sm font-medium text-ink">
@@ -326,15 +346,20 @@ export function ExpenseManager({
 
             <label className="block text-sm font-medium text-ink">
               支付方式
-              <input
-                type="text"
+              <select
                 value={form.paymentMethod}
                 onChange={(event) =>
                   updateForm("paymentMethod", event.target.value)
                 }
-                placeholder="例如：现金、微信、支付宝"
                 className="mt-2 w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-pine focus:ring-2 focus:ring-pine/20"
-              />
+              >
+                <option value="">请选择支付方式</option>
+                {paymentMethodOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
             </label>
 
             <label className="flex items-center gap-3 text-sm font-medium text-ink">

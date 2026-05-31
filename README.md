@@ -39,6 +39,28 @@ npm run dev
 http://localhost:3000
 ```
 
+If port `3000` is occupied, use the fallback URL printed by Next.js, such as
+`http://localhost:3001`.
+
+## Development Sync Rules
+
+GitHub `main` and the live Supabase database are the only project baselines. Do
+not use stale local files as the source of truth when switching between work
+computers.
+
+See `docs/device-handoff.md` for the complete new-device restore checklist,
+database consistency workflow, and current handoff snapshot.
+
+Before development on any computer:
+
+```bash
+git pull origin main
+npm install
+# Confirm that .env.local exists and points to the intended Supabase project.
+npm run build
+npm run dev
+```
+
 ## Current Scope
 
 ### Phase 1

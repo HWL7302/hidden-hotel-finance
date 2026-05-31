@@ -1,12 +1,29 @@
 create extension if not exists "pgcrypto";
 
-create type public.profile_role as enum ('admin', 'operator', 'investor');
-create type public.record_status as enum ('draft', 'confirmed', 'locked', 'void');
-create type public.evidence_owner_type as enum ('income', 'expense', 'room', 'monthly_closing', 'dividend', 'other');
+create type public.app_role as enum ('admin', 'operator', 'investor');
+create type public.income_source as enum ('meituan', 'douyin', 'wechat_offline', 'long_stay', 'other');
+create type public.expense_category as enum (
+  'rent',
+  'salary',
+  'utilities',
+  'network',
+  'game_membership',
+  'cleaning_supplies',
+  'repair',
+  'platform_promotion',
+  'renovation_equipment',
+  'other'
+);
+create type public.customer_type as enum ('long_stay', 'monthly_rent', 'package_month', 'special_discount');
+create type public.room_status as enum ('active', 'checked_out', 'cancelled');
+create type public.dividend_status as enum ('pending', 'paid', 'partial', 'cancelled');
+create type public.evidence_type as enum ('income', 'expense', 'dividend', 'long_stay_payment', 'other');
+create type public.audit_action as enum ('insert', 'update', 'delete', 'locked_month_update', 'close_month', 'lock_month');
 
 create table public.stores (
   id uuid primary key default gen_random_uuid(),
   name text not null,
+  city text not null default '贵阳',
   address text,
   is_active boolean not null default true,
   created_at timestamptz not null default now(),
@@ -15,10 +32,11 @@ create table public.stores (
 
 create table public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
-  store_id uuid references public.stores(id),
-  email text not null,
+  email text,
   full_name text,
-  role public.profile_role not null default 'operator',
+  role public.app_role not null default 'investor',
+  store_id uuid references public.stores(id),
+  is_active boolean not null default true,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -26,13 +44,15 @@ create table public.profiles (
 create table public.incomes (
   id uuid primary key default gen_random_uuid(),
   store_id uuid not null references public.stores(id),
-  income_date date not null,
-  category text not null,
-  amount numeric(14, 2) not null check (amount >= 0),
-  payment_method text,
-  description text,
-  status public.record_status not null default 'draft',
-  created_by uuid references public.profiles(id),
+  date date not null,
+  source public.income_source not null,
+  gross_amount numeric not null default 0 check (gross_amount >= 0),
+  fee_amount numeric not null default 0 check (fee_amount >= 0),
+  net_amount numeric not null default 0 check (net_amount >= 0),
+  settlement_period date not null,
+  note text,
+  evidence_file uuid,
+  created_by uuid not null references auth.users(id),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -40,14 +60,15 @@ create table public.incomes (
 create table public.expenses (
   id uuid primary key default gen_random_uuid(),
   store_id uuid not null references public.stores(id),
-  expense_date date not null,
-  category text not null,
-  amount numeric(14, 2) not null check (amount >= 0),
+  date date not null,
+  category public.expense_category not null,
+  amount numeric not null default 0 check (amount >= 0),
+  payee text,
   payment_method text,
-  vendor text,
-  description text,
-  status public.record_status not null default 'draft',
-  created_by uuid references public.profiles(id),
+  included_in_monthly_cost boolean not null default true,
+  note text,
+  evidence_file uuid,
+  created_by uuid not null references auth.users(id),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -56,14 +77,17 @@ create table public.rooms (
   id uuid primary key default gen_random_uuid(),
   store_id uuid not null references public.stores(id),
   room_number text not null,
-  tenant_name text,
-  contract_type text not null,
-  monthly_rent numeric(14, 2) not null default 0 check (monthly_rent >= 0),
-  deposit_amount numeric(14, 2) not null default 0 check (deposit_amount >= 0),
-  start_date date,
-  end_date date,
-  notes text,
-  is_active boolean not null default true,
+  customer_name_or_code text not null,
+  customer_type public.customer_type not null,
+  monthly_rent numeric not null default 0 check (monthly_rent >= 0),
+  check_in_date date not null,
+  expected_check_out_date date,
+  actual_check_out_date date,
+  payment_received numeric not null default 0 check (payment_received >= 0),
+  payment_evidence_file uuid,
+  note text,
+  status public.room_status not null default 'active',
+  created_by uuid not null references auth.users(id),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -71,11 +95,12 @@ create table public.rooms (
 create table public.investors (
   id uuid primary key default gen_random_uuid(),
   store_id uuid not null references public.stores(id),
-  profile_id uuid references public.profiles(id),
   name text not null,
-  investment_amount numeric(14, 2) not null check (investment_amount >= 0),
-  share_percentage numeric(7, 4) not null check (share_percentage >= 0 and share_percentage <= 100),
-  paid_dividend_total numeric(14, 2) not null default 0 check (paid_dividend_total >= 0),
+  user_id uuid references auth.users(id),
+  investment_amount numeric not null default 0 check (investment_amount >= 0),
+  share_ratio numeric not null default 0 check (share_ratio >= 0 and share_ratio <= 1),
+  total_dividend_received numeric not null default 0 check (total_dividend_received >= 0),
+  note text,
   is_active boolean not null default true,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -84,29 +109,39 @@ create table public.investors (
 create table public.monthly_closings (
   id uuid primary key default gen_random_uuid(),
   store_id uuid not null references public.stores(id),
-  closing_month date not null,
-  total_income numeric(14, 2) not null default 0,
-  total_expense numeric(14, 2) not null default 0,
-  net_profit numeric(14, 2) not null default 0,
-  dividend_pool numeric(14, 2) not null default 0,
+  month date not null check (date_trunc('month', month)::date = month),
+  total_income numeric not null default 0,
+  income_by_source jsonb not null default '{}',
+  total_expense numeric not null default 0,
+  expense_by_category jsonb not null default '{}',
+  net_profit numeric not null default 0,
+  distributable_profit numeric not null default 0,
+  paid_dividend_amount numeric not null default 0,
+  unpaid_dividend_amount numeric not null default 0,
+  is_closed boolean not null default false,
   is_locked boolean not null default false,
+  closed_by uuid references auth.users(id),
+  closed_at timestamptz,
+  locked_by uuid references auth.users(id),
   locked_at timestamptz,
-  locked_by uuid references public.profiles(id),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  unique (store_id, closing_month)
+  unique (store_id, month)
 );
 
 create table public.dividends (
   id uuid primary key default gen_random_uuid(),
   store_id uuid not null references public.stores(id),
-  monthly_closing_id uuid not null references public.monthly_closings(id),
+  month date not null check (date_trunc('month', month)::date = month),
   investor_id uuid not null references public.investors(id),
-  expected_amount numeric(14, 2) not null default 0 check (expected_amount >= 0),
-  paid_amount numeric(14, 2) not null default 0 check (paid_amount >= 0),
-  paid_at date,
-  status public.record_status not null default 'draft',
-  notes text,
+  expected_amount numeric not null default 0 check (expected_amount >= 0),
+  actual_amount numeric not null default 0 check (actual_amount >= 0),
+  paid_date date,
+  payment_method text,
+  evidence_file uuid,
+  status public.dividend_status not null default 'pending',
+  note text,
+  created_by uuid references auth.users(id),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -114,38 +149,49 @@ create table public.dividends (
 create table public.evidence_files (
   id uuid primary key default gen_random_uuid(),
   store_id uuid not null references public.stores(id),
-  owner_type public.evidence_owner_type not null,
-  owner_id uuid,
-  bucket_name text not null,
-  file_path text not null,
+  evidence_type public.evidence_type not null,
+  file_url text not null,
   file_name text not null,
-  mime_type text,
-  file_size bigint,
-  uploaded_by uuid references public.profiles(id),
+  file_type text not null check (file_type in ('jpg', 'jpeg', 'png', 'webp', 'pdf', 'xlsx', 'csv')),
+  storage_bucket text not null default 'evidence-files',
+  storage_path text not null,
+  related_table text,
+  related_record_id uuid,
+  uploaded_by uuid not null references auth.users(id),
   created_at timestamptz not null default now()
 );
 
+alter table public.incomes
+  add constraint incomes_evidence_file_fkey foreign key (evidence_file) references public.evidence_files(id);
+alter table public.expenses
+  add constraint expenses_evidence_file_fkey foreign key (evidence_file) references public.evidence_files(id);
+alter table public.rooms
+  add constraint rooms_payment_evidence_file_fkey foreign key (payment_evidence_file) references public.evidence_files(id);
+alter table public.dividends
+  add constraint dividends_evidence_file_fkey foreign key (evidence_file) references public.evidence_files(id);
+
 create table public.audit_logs (
   id uuid primary key default gen_random_uuid(),
-  store_id uuid references public.stores(id),
-  actor_id uuid references public.profiles(id),
-  action text not null,
-  target_table text not null,
-  target_id uuid,
-  old_data jsonb,
-  new_data jsonb,
+  store_id uuid not null references public.stores(id),
+  user_id uuid references auth.users(id),
+  action public.audit_action not null,
+  table_name text not null,
+  record_id uuid,
+  old_value jsonb,
+  new_value jsonb,
   reason text,
   created_at timestamptz not null default now()
 );
 
-create index incomes_store_date_idx on public.incomes (store_id, income_date);
-create index expenses_store_date_idx on public.expenses (store_id, expense_date);
-create index rooms_store_active_idx on public.rooms (store_id, is_active);
+create index incomes_store_date_idx on public.incomes (store_id, date);
+create index expenses_store_date_idx on public.expenses (store_id, date);
+create index rooms_store_status_idx on public.rooms (store_id, status);
 create index investors_store_active_idx on public.investors (store_id, is_active);
-create index monthly_closings_store_month_idx on public.monthly_closings (store_id, closing_month);
+create index monthly_closings_store_month_idx on public.monthly_closings (store_id, month);
 create index dividends_investor_idx on public.dividends (investor_id);
-create index evidence_files_owner_idx on public.evidence_files (owner_type, owner_id);
-create index audit_logs_target_idx on public.audit_logs (target_table, target_id);
+create index dividends_store_month_idx on public.dividends (store_id, month);
+create index evidence_files_store_type_idx on public.evidence_files (store_id, evidence_type);
+create index audit_logs_store_created_idx on public.audit_logs (store_id, created_at desc);
 
 alter table public.stores enable row level security;
 alter table public.profiles enable row level security;
@@ -157,12 +203,6 @@ alter table public.monthly_closings enable row level security;
 alter table public.dividends enable row level security;
 alter table public.evidence_files enable row level security;
 alter table public.audit_logs enable row level security;
-
-grant usage on schema public to authenticated;
-grant select on table public.profiles to authenticated;
-grant select on table public.stores to authenticated;
-grant select, insert, update, delete on table public.incomes to authenticated;
-grant select, insert, update, delete on table public.expenses to authenticated;
 
 create or replace function public.current_profile_role()
 returns text
@@ -190,132 +230,104 @@ as $$
   limit 1
 $$;
 
+grant usage on schema public to authenticated;
 grant execute on function public.current_profile_role() to authenticated;
 grant execute on function public.current_profile_store_id() to authenticated;
+grant select on table public.profiles to authenticated;
+grant select on table public.stores to authenticated;
+grant select, insert, update, delete on table public.incomes to authenticated;
+grant select, insert, update, delete on table public.expenses to authenticated;
 
-drop policy if exists "profiles can read own profile" on public.profiles;
-drop policy if exists "admins can read all profiles" on public.profiles;
-drop policy if exists "profile select own or admin" on public.profiles;
-drop policy if exists "admins can read all business data" on public.stores;
-drop policy if exists "operators can read stores" on public.stores;
-drop policy if exists "store select own store" on public.stores;
-drop policy if exists "operators can insert incomes" on public.incomes;
-drop policy if exists "income select by store role" on public.incomes;
-drop policy if exists "income insert by admin operator" on public.incomes;
-drop policy if exists "income update by admin operator" on public.incomes;
-drop policy if exists "income delete by admin operator" on public.incomes;
-drop policy if exists "operators can insert expenses" on public.expenses;
-drop policy if exists "expense select by store role" on public.expenses;
-drop policy if exists "expense insert by admin operator" on public.expenses;
-drop policy if exists "expense update by admin operator" on public.expenses;
-drop policy if exists "expense delete by admin operator" on public.expenses;
-
-create policy "profile select own or admin"
+create policy "profile select own"
   on public.profiles for select
-  using (
-    auth.uid() is not null
-    and id = auth.uid()
-  );
+  to authenticated
+  using (auth.uid() is not null and id = auth.uid());
 
-create policy "store select own store"
+create policy "store select own"
   on public.stores for select
-  using (
-    auth.uid() is not null
-    and id = public.current_profile_store_id()
-  );
+  to authenticated
+  using (auth.uid() is not null and id = public.current_profile_store_id());
 
 create policy "income select by store role"
   on public.incomes for select
+  to authenticated
   using (
     auth.uid() is not null
     and public.current_profile_role() in ('admin', 'operator', 'investor')
-    and public.current_profile_store_id() = incomes.store_id
+    and public.current_profile_store_id() = store_id
   );
 
 create policy "income insert by admin operator"
   on public.incomes for insert
+  to authenticated
   with check (
     auth.uid() is not null
     and public.current_profile_role() in ('admin', 'operator')
-    and public.current_profile_store_id() = incomes.store_id
+    and public.current_profile_store_id() = store_id
+    and created_by = auth.uid()
   );
 
 create policy "income update by admin operator"
   on public.incomes for update
+  to authenticated
   using (
     auth.uid() is not null
     and public.current_profile_role() in ('admin', 'operator')
-    and public.current_profile_store_id() = incomes.store_id
+    and public.current_profile_store_id() = store_id
   )
   with check (
     auth.uid() is not null
     and public.current_profile_role() in ('admin', 'operator')
-    and public.current_profile_store_id() = incomes.store_id
+    and public.current_profile_store_id() = store_id
   );
 
 create policy "income delete by admin operator"
   on public.incomes for delete
+  to authenticated
   using (
     auth.uid() is not null
     and public.current_profile_role() in ('admin', 'operator')
-    and public.current_profile_store_id() = incomes.store_id
+    and public.current_profile_store_id() = store_id
   );
 
 create policy "expense select by store role"
   on public.expenses for select
+  to authenticated
   using (
     auth.uid() is not null
     and public.current_profile_role() in ('admin', 'operator', 'investor')
-    and public.current_profile_store_id() = expenses.store_id
+    and public.current_profile_store_id() = store_id
   );
 
 create policy "expense insert by admin operator"
   on public.expenses for insert
+  to authenticated
   with check (
     auth.uid() is not null
     and public.current_profile_role() in ('admin', 'operator')
-    and public.current_profile_store_id() = expenses.store_id
+    and public.current_profile_store_id() = store_id
+    and created_by = auth.uid()
   );
 
 create policy "expense update by admin operator"
   on public.expenses for update
+  to authenticated
   using (
     auth.uid() is not null
     and public.current_profile_role() in ('admin', 'operator')
-    and public.current_profile_store_id() = expenses.store_id
+    and public.current_profile_store_id() = store_id
   )
   with check (
     auth.uid() is not null
     and public.current_profile_role() in ('admin', 'operator')
-    and public.current_profile_store_id() = expenses.store_id
+    and public.current_profile_store_id() = store_id
   );
 
 create policy "expense delete by admin operator"
   on public.expenses for delete
+  to authenticated
   using (
     auth.uid() is not null
     and public.current_profile_role() in ('admin', 'operator')
-    and public.current_profile_store_id() = expenses.store_id
-  );
-
-create policy "operators can insert evidence"
-  on public.evidence_files for insert
-  with check (
-    exists (
-      select 1 from public.profiles p
-      where p.id = auth.uid() and p.role in ('admin', 'operator')
-    )
-  );
-
-create policy "investors can read own investor row"
-  on public.investors for select
-  using (profile_id = auth.uid());
-
-create policy "investors can read own dividends"
-  on public.dividends for select
-  using (
-    exists (
-      select 1 from public.investors i
-      where i.id = dividends.investor_id and i.profile_id = auth.uid()
-    )
+    and public.current_profile_store_id() = store_id
   );
