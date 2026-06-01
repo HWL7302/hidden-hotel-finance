@@ -1,7 +1,15 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase-client";
+import {
+  createSignedEvidenceUrl,
+  uploadEvidenceForRecord
+} from "@/lib/evidence-client";
+import {
+  getIncomeSourceLabel,
+  incomeSourceOptions
+} from "@/lib/finance-options";
 
 type IncomeRecord = {
   id: string;
@@ -12,6 +20,7 @@ type IncomeRecord = {
   fee_amount: string | number | null;
   net_amount: string | number | null;
   settlement_period: string | null;
+  evidence_file: string | null;
   note: string | null;
   created_by: string | null;
   created_at: string;
@@ -32,19 +41,11 @@ const emptyForm: IncomeFormState = {
   date: new Date().toISOString().slice(0, 10),
   source: "",
   grossAmount: "",
-  feeAmount: "",
-  netAmount: "",
-  settlementPeriod: "",
+  feeAmount: "0.00",
+  netAmount: "0.00",
+  settlementPeriod: currentMonthValue(),
   note: ""
 };
-
-const incomeSourceOptions = [
-  { value: "meituan", label: "美团" },
-  { value: "douyin", label: "抖音" },
-  { value: "wechat_offline", label: "微信线下" },
-  { value: "long_stay", label: "长住/月租" },
-  { value: "other", label: "其他" }
-];
 
 function currentMonthValue() {
   return new Date().toISOString().slice(0, 7);
@@ -70,12 +71,44 @@ function formatMoney(value: string | number | null) {
   return `${integerPart}.${decimalPart.padEnd(2, "0").slice(0, 2)}`;
 }
 
+function formatSettlementPeriod(value: string | null) {
+  if (!value) {
+    return "*";
+  }
+
+  const [year, month] = value.slice(0, 7).split("-");
+  return `${year}年${month}月`;
+}
+
 function validateOptionalAmount(value: string) {
   if (!value) {
     return true;
   }
 
   return /^(0|[1-9]\d*)(\.\d{1,2})?$/.test(value);
+}
+
+function amountToCents(value: string) {
+  const [integerPart = "0", decimalPart = ""] = value.split(".");
+  return (
+    BigInt(integerPart || "0") * BigInt(100) +
+    BigInt(decimalPart.padEnd(2, "0"))
+  );
+}
+
+function centsToAmount(value: bigint) {
+  const safeValue = value < BigInt(0) ? BigInt(0) : value;
+  const integerPart = safeValue / BigInt(100);
+  const decimalPart = String(safeValue % BigInt(100)).padStart(2, "0");
+  return `${integerPart}.${decimalPart}`;
+}
+
+function calculateNetAmount(grossAmount: string, feeAmount: string) {
+  if (!validateOptionalAmount(grossAmount) || !validateOptionalAmount(feeAmount)) {
+    return "";
+  }
+
+  return centsToAmount(amountToCents(grossAmount || "0") - amountToCents(feeAmount || "0"));
 }
 
 export function IncomeManager({
@@ -96,6 +129,8 @@ export function IncomeManager({
   const [notice, setNotice] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [evidenceFile, setEvidenceFile] = useState<File | null>(null);
+  const [fileInputKey, setFileInputKey] = useState(0);
 
   async function loadIncomes() {
     setError("");
@@ -106,7 +141,7 @@ export function IncomeManager({
     let query = supabase
       .from("incomes")
       .select(
-        "id,store_id,date,source,gross_amount,fee_amount,net_amount,settlement_period,note,created_by,created_at,updated_at"
+        "id,store_id,date,source,gross_amount,fee_amount,net_amount,settlement_period,note,evidence_file,created_by,created_at,updated_at"
       )
       .gte("date", range.start)
       .lt("date", range.end)
@@ -140,9 +175,34 @@ export function IncomeManager({
     setForm((current) => ({ ...current, [key]: value }));
   }
 
+  function updateAmountAndNet(
+    key: "grossAmount" | "feeAmount",
+    value: string
+  ) {
+    setForm((current) => {
+      const next = { ...current, [key]: value };
+      return {
+        ...next,
+        netAmount: calculateNetAmount(next.grossAmount, next.feeAmount)
+      };
+    });
+  }
+
   function resetForm() {
     setEditingId(null);
-    setForm({ ...emptyForm, date: `${month}-01` });
+    setEvidenceFile(null);
+    setFileInputKey((current) => current + 1);
+    setForm({
+      ...emptyForm,
+      date: `${month}-01`,
+      feeAmount: "0.00",
+      netAmount: "0.00",
+      settlementPeriod: month
+    });
+  }
+
+  function handleEvidenceFileChange(event: ChangeEvent<HTMLInputElement>) {
+    setEvidenceFile(event.target.files?.[0] ?? null);
   }
 
   function startEdit(income: IncomeRecord) {
@@ -151,7 +211,7 @@ export function IncomeManager({
       date: income.date,
       source: income.source,
       grossAmount: String(income.gross_amount ?? ""),
-      feeAmount: String(income.fee_amount ?? ""),
+      feeAmount: String(income.fee_amount ?? "0"),
       netAmount: String(income.net_amount ?? ""),
       settlementPeriod: income.settlement_period?.slice(0, 7) ?? "",
       note: income.note ?? ""
@@ -189,6 +249,23 @@ export function IncomeManager({
       return;
     }
 
+    const feeAmount = form.feeAmount || "0";
+    const netAmount = form.netAmount || calculateNetAmount(form.grossAmount, feeAmount);
+    const calculatedNetAmount = calculateNetAmount(form.grossAmount, feeAmount);
+
+    if (!netAmount) {
+      setError("请输入净收入。");
+      return;
+    }
+
+    if (
+      amountToCents(netAmount) !== amountToCents(calculatedNetAmount) &&
+      !form.note.trim()
+    ) {
+      setError("净收入金额与计算结果存在差额，请在备注中填写原因。");
+      return;
+    }
+
     setIsSaving(true);
 
     const payload = {
@@ -196,8 +273,8 @@ export function IncomeManager({
       date: form.date,
       source: form.source.trim(),
       gross_amount: form.grossAmount,
-      fee_amount: form.feeAmount || null,
-      net_amount: form.netAmount || null,
+      fee_amount: feeAmount,
+      net_amount: netAmount,
       settlement_period: `${form.settlementPeriod}-01`,
       note: form.note.trim() || null,
       created_by: currentUserId
@@ -216,15 +293,40 @@ export function IncomeManager({
             note: payload.note
           })
           .eq("id", editingId)
-      : await supabase.from("incomes").insert(payload);
-
-    setIsSaving(false);
+          .select("id")
+          .single()
+      : await supabase.from("incomes").insert(payload).select("id").single();
 
     if (result.error) {
+      setIsSaving(false);
       setError(result.error.message);
       return;
     }
 
+    if (evidenceFile) {
+      try {
+        await uploadEvidenceForRecord({
+          supabase,
+          file: evidenceFile,
+          storeId: defaultStoreId,
+          userId: currentUserId,
+          evidenceType: "income",
+          relatedTable: "incomes",
+          relatedRecordId: result.data.id
+        });
+      } catch (uploadError) {
+        setIsSaving(false);
+        setError(
+          `收入记录已保存，但凭证上传失败：${
+            uploadError instanceof Error ? uploadError.message : "未知错误"
+          }`
+        );
+        await loadIncomes();
+        return;
+      }
+    }
+
+    setIsSaving(false);
     setNotice(editingId ? "收入记录已更新。" : "收入记录已新增。");
     resetForm();
     await loadIncomes();
@@ -232,7 +334,7 @@ export function IncomeManager({
 
   async function handleDelete(income: IncomeRecord) {
     const confirmed = window.confirm(
-      `确认删除 ${income.date} 的收入记录「${income.source}」吗？`
+      `确认删除 ${income.date} 的收入记录「${getIncomeSourceLabel(income.source)}」吗？`
     );
 
     if (!confirmed) {
@@ -254,6 +356,15 @@ export function IncomeManager({
 
     setNotice("收入记录已删除。");
     await loadIncomes();
+  }
+
+  async function handleViewEvidence(evidenceId: string) {
+    try {
+      const signedUrl = await createSignedEvidenceUrl(supabase, evidenceId);
+      window.open(signedUrl, "_blank", "noopener,noreferrer");
+    } catch (viewError) {
+      setError(viewError instanceof Error ? viewError.message : "凭证打开失败。");
+    }
   }
 
   return (
@@ -333,7 +444,9 @@ export function IncomeManager({
                 required
                 inputMode="decimal"
                 value={form.grossAmount}
-                onChange={(event) => updateForm("grossAmount", event.target.value)}
+                onChange={(event) =>
+                  updateAmountAndNet("grossAmount", event.target.value)
+                }
                 placeholder="0.00"
                 className="mt-2 w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-pine focus:ring-2 focus:ring-pine/20"
               />
@@ -345,7 +458,9 @@ export function IncomeManager({
                 type="text"
                 inputMode="decimal"
                 value={form.feeAmount}
-                onChange={(event) => updateForm("feeAmount", event.target.value)}
+                onChange={(event) =>
+                  updateAmountAndNet("feeAmount", event.target.value)
+                }
                 placeholder="0.00"
                 className="mt-2 w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-pine focus:ring-2 focus:ring-pine/20"
               />
@@ -374,6 +489,20 @@ export function IncomeManager({
                 }
                 className="mt-2 w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-pine focus:ring-2 focus:ring-pine/20"
               />
+            </label>
+
+            <label className="block text-sm font-medium text-ink">
+              凭证上传
+              <input
+                key={fileInputKey}
+                type="file"
+                accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf"
+                onChange={handleEvidenceFileChange}
+                className="mt-2 block w-full text-sm text-stone-700"
+              />
+              <span className="mt-1 block text-xs font-normal text-stone-500">
+                可选。支持 jpg、jpeg、png 和 pdf，保存收入后自动关联。
+              </span>
             </label>
 
             <label className="block text-sm font-medium text-ink">
@@ -406,6 +535,17 @@ export function IncomeManager({
               </button>
             ) : null}
           </div>
+          <button
+            type="button"
+            onClick={() =>
+              window.alert(
+                "该功能预留中，后续将支持上传截图后自动识别金额、日期和来源，人工确认后生成收入记录。"
+              )
+            }
+            className="mt-3 rounded-md border border-stone-300 px-4 py-2 text-sm font-medium text-ink transition hover:border-pine hover:text-pine"
+          >
+            凭证识别录入（预留）
+          </button>
         </form>
 
         <div className="rounded-lg border border-stone-200 bg-white shadow-sm">
@@ -430,6 +570,7 @@ export function IncomeManager({
                   <th className="px-4 py-3 font-semibold">手续费</th>
                   <th className="px-4 py-3 font-semibold">净收入</th>
                   <th className="px-4 py-3 font-semibold">结算周期</th>
+                  <th className="px-4 py-3 font-semibold">凭证</th>
                   <th className="px-4 py-3 font-semibold">备注</th>
                   <th className="px-4 py-3 font-semibold">操作</th>
                 </tr>
@@ -437,13 +578,13 @@ export function IncomeManager({
               <tbody className="divide-y divide-stone-100">
                 {isLoading ? (
                   <tr>
-                    <td className="px-4 py-6 text-stone-500" colSpan={8}>
+                    <td className="px-4 py-6 text-stone-500" colSpan={9}>
                       正在读取收入数据...
                     </td>
                   </tr>
                 ) : incomes.length === 0 ? (
                   <tr>
-                    <td className="px-4 py-6 text-stone-500" colSpan={8}>
+                    <td className="px-4 py-6 text-stone-500" colSpan={9}>
                       当前月份暂无收入记录。
                     </td>
                   </tr>
@@ -454,7 +595,7 @@ export function IncomeManager({
                         {income.date}
                       </td>
                       <td className="px-4 py-3 font-medium text-ink">
-                        {income.source}
+                        {getIncomeSourceLabel(income.source)}
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-stone-700">
                         {formatMoney(income.gross_amount)}
@@ -466,7 +607,22 @@ export function IncomeManager({
                         {formatMoney(income.net_amount)}
                       </td>
                       <td className="px-4 py-3 text-stone-700">
-                        {income.settlement_period || "-"}
+                        {formatSettlementPeriod(income.settlement_period)}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3">
+                        {income.evidence_file ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              void handleViewEvidence(income.evidence_file!)
+                            }
+                            className="text-sm font-medium text-pine hover:text-ink"
+                          >
+                            查看凭证
+                          </button>
+                        ) : (
+                          <span className="text-stone-400">-</span>
+                        )}
                       </td>
                       <td className="min-w-48 px-4 py-3 text-stone-700">
                         {income.note || "-"}

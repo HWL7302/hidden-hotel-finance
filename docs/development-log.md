@@ -40,3 +40,17 @@
 - Changed expense payment method to a fixed select while preserving its database `text` type.
 - Reconciled the live Supabase access chain for `profiles`, `stores`, `incomes`, and `expenses`.
 - Added cross-device restore, database audit, and read-only verification guidance.
+- Started Phase 3A.
+- Added Chinese list labels for income sources and expense categories.
+- Added fee defaulting, automatic net income calculation, and manual-difference note validation.
+- Added the Supabase Storage-backed evidence center for upload, signed viewing, deletion, and income or expense relationships.
+- Added the hidden administrator-only development test data cleanup tool.
+- Added the Phase 3 evidence bucket, RLS, Storage policy, and cleanup RPC SQL script.
+- Moved evidence upload into the income and expense entry forms so files are linked immediately after a record is saved.
+- Added evidence viewing columns to the income and expense lists without adding thumbnails or list-side uploads.
+- Repositioned the evidence center as an archive with month and income, expense, or other type filters.
+- Added disabled OCR-assisted entry buttons as future workflow placeholders. No OCR, AI API, or import feature was implemented.
+- Added the first read-only monthly closing page.
+- Summarized income by `settlement_period` and expense by `date`, while counting only expenses marked `included_in_monthly_cost`.
+- Added monthly income, expense, net profit, evidence completeness, income-source, and expense-category summaries. Evidence completeness covers all monthly income and expense records; expense totals include only records marked as monthly cost.
+- Kept dividend calculation, month locking, monthly closing writes, and export outside the first monthly closing scope.

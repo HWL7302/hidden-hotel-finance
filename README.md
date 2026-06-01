@@ -94,9 +94,25 @@ npm run dev
 - Delete single expense with browser confirmation
 - `created_by` and default `store_id` handling
 
+### Phase 3A
+
+- Chinese display labels for income sources and expense categories
+- Income fee defaulting and editable automatic net amount calculation
+- Optional evidence upload during income and expense entry
+- Supabase Storage-backed evidence archive with month and record-type filters
+- Income and expense evidence relationships with signed viewing links
+- Hidden administrator-only development data cleanup tool
+
+### Monthly Closing V1
+
+- Read-only monthly operating summary
+- Net income total grouped by income settlement period
+- Monthly-cost expense total grouped by expense date
+- Net profit and evidence completeness cards
+- Income-source and expense-category summary tables
+
 ## Not Included Yet
 
-- Evidence upload
 - Monthly closing
 - Dividend calculation
 - Excel import

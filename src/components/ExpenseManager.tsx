@@ -1,7 +1,16 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase-client";
+import {
+  createSignedEvidenceUrl,
+  uploadEvidenceForRecord
+} from "@/lib/evidence-client";
+import {
+  expenseCategoryOptions,
+  getExpenseCategoryLabel,
+  paymentMethodOptions
+} from "@/lib/finance-options";
 
 type ExpenseRecord = {
   id: string;
@@ -13,6 +22,7 @@ type ExpenseRecord = {
   payment_method: string | null;
   included_in_monthly_cost: boolean | null;
   note: string | null;
+  evidence_file: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -37,21 +47,6 @@ const emptyForm: ExpenseFormState = {
   includedInMonthlyCost: true,
   note: ""
 };
-
-const expenseCategoryOptions = [
-  { value: "rent", label: "房租" },
-  { value: "salary", label: "工资" },
-  { value: "utilities", label: "水电" },
-  { value: "network", label: "网络" },
-  { value: "game_membership", label: "游戏会员" },
-  { value: "cleaning_supplies", label: "清洁耗材" },
-  { value: "repair", label: "维修" },
-  { value: "platform_promotion", label: "平台推广" },
-  { value: "renovation_equipment", label: "装修设备" },
-  { value: "other", label: "其他" }
-];
-
-const paymentMethodOptions = ["微信", "支付宝", "现金", "银行转账", "其他"];
 
 function currentMonthValue() {
   return new Date().toISOString().slice(0, 7);
@@ -99,6 +94,8 @@ export function ExpenseManager({
   const [notice, setNotice] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [evidenceFile, setEvidenceFile] = useState<File | null>(null);
+  const [fileInputKey, setFileInputKey] = useState(0);
 
   async function loadExpenses() {
     setError("");
@@ -109,7 +106,7 @@ export function ExpenseManager({
     let query = supabase
       .from("expenses")
       .select(
-        "id,store_id,date,category,amount,payee,payment_method,included_in_monthly_cost,note,created_by,created_at,updated_at"
+        "id,store_id,date,category,amount,payee,payment_method,included_in_monthly_cost,note,evidence_file,created_by,created_at,updated_at"
       )
       .gte("date", range.start)
       .lt("date", range.end)
@@ -145,7 +142,13 @@ export function ExpenseManager({
 
   function resetForm() {
     setEditingId(null);
+    setEvidenceFile(null);
+    setFileInputKey((current) => current + 1);
     setForm({ ...emptyForm, date: `${month}-01` });
+  }
+
+  function handleEvidenceFileChange(event: ChangeEvent<HTMLInputElement>) {
+    setEvidenceFile(event.target.files?.[0] ?? null);
   }
 
   function startEdit(expense: ExpenseRecord) {
@@ -210,15 +213,40 @@ export function ExpenseManager({
             note: payload.note
           })
           .eq("id", editingId)
-      : await supabase.from("expenses").insert(payload);
-
-    setIsSaving(false);
+          .select("id")
+          .single()
+      : await supabase.from("expenses").insert(payload).select("id").single();
 
     if (result.error) {
+      setIsSaving(false);
       setError(result.error.message);
       return;
     }
 
+    if (evidenceFile) {
+      try {
+        await uploadEvidenceForRecord({
+          supabase,
+          file: evidenceFile,
+          storeId: defaultStoreId,
+          userId: currentUserId,
+          evidenceType: "expense",
+          relatedTable: "expenses",
+          relatedRecordId: result.data.id
+        });
+      } catch (uploadError) {
+        setIsSaving(false);
+        setError(
+          `支出记录已保存，但凭证上传失败：${
+            uploadError instanceof Error ? uploadError.message : "未知错误"
+          }`
+        );
+        await loadExpenses();
+        return;
+      }
+    }
+
+    setIsSaving(false);
     setNotice(editingId ? "支出记录已更新。" : "支出记录已新增。");
     resetForm();
     await loadExpenses();
@@ -226,7 +254,7 @@ export function ExpenseManager({
 
   async function handleDelete(expense: ExpenseRecord) {
     const confirmed = window.confirm(
-      `确认删除 ${expense.date} 的支出记录「${expense.category}」吗？`
+      `确认删除 ${expense.date} 的支出记录「${getExpenseCategoryLabel(expense.category)}」吗？`
     );
 
     if (!confirmed) {
@@ -248,6 +276,15 @@ export function ExpenseManager({
 
     setNotice("支出记录已删除。");
     await loadExpenses();
+  }
+
+  async function handleViewEvidence(evidenceId: string) {
+    try {
+      const signedUrl = await createSignedEvidenceUrl(supabase, evidenceId);
+      window.open(signedUrl, "_blank", "noopener,noreferrer");
+    } catch (viewError) {
+      setError(viewError instanceof Error ? viewError.message : "凭证打开失败。");
+    }
   }
 
   return (
@@ -375,12 +412,26 @@ export function ExpenseManager({
             </label>
 
             <label className="block text-sm font-medium text-ink">
+              凭证上传
+              <input
+                key={fileInputKey}
+                type="file"
+                accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf"
+                onChange={handleEvidenceFileChange}
+                className="mt-2 block w-full text-sm text-stone-700"
+              />
+              <span className="mt-1 block text-xs font-normal text-stone-500">
+                可选。支持 jpg、jpeg、png 和 pdf，保存支出后自动关联。
+              </span>
+            </label>
+
+            <label className="block text-sm font-medium text-ink">
               备注
               <textarea
                 value={form.note}
                 onChange={(event) => updateForm("note", event.target.value)}
                 rows={3}
-                placeholder="凭证上传将在后续阶段实现。"
+                placeholder="补充支出说明"
                 className="mt-2 w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-pine focus:ring-2 focus:ring-pine/20"
               />
             </label>
@@ -404,6 +455,17 @@ export function ExpenseManager({
               </button>
             ) : null}
           </div>
+          <button
+            type="button"
+            onClick={() =>
+              window.alert(
+                "该功能预留中，后续将支持上传截图后自动识别金额、日期和分类，人工确认后生成支出记录。"
+              )
+            }
+            className="mt-3 rounded-md border border-stone-300 px-4 py-2 text-sm font-medium text-stone-600 transition hover:border-pine hover:text-pine"
+          >
+            凭证识别录入（预留）
+          </button>
         </form>
 
         <div className="rounded-lg border border-stone-200 bg-white shadow-sm">
@@ -428,6 +490,7 @@ export function ExpenseManager({
                   <th className="px-4 py-3 font-semibold">收款方</th>
                   <th className="px-4 py-3 font-semibold">支付方式</th>
                   <th className="px-4 py-3 font-semibold">月度成本</th>
+                  <th className="px-4 py-3 font-semibold">凭证</th>
                   <th className="px-4 py-3 font-semibold">备注</th>
                   <th className="px-4 py-3 font-semibold">操作</th>
                 </tr>
@@ -435,13 +498,13 @@ export function ExpenseManager({
               <tbody className="divide-y divide-stone-100">
                 {isLoading ? (
                   <tr>
-                    <td className="px-4 py-6 text-stone-500" colSpan={8}>
+                    <td className="px-4 py-6 text-stone-500" colSpan={9}>
                       正在读取支出数据...
                     </td>
                   </tr>
                 ) : expenses.length === 0 ? (
                   <tr>
-                    <td className="px-4 py-6 text-stone-500" colSpan={8}>
+                    <td className="px-4 py-6 text-stone-500" colSpan={9}>
                       当前月份暂无支出记录。
                     </td>
                   </tr>
@@ -452,7 +515,7 @@ export function ExpenseManager({
                         {expense.date}
                       </td>
                       <td className="px-4 py-3 font-medium text-ink">
-                        {expense.category}
+                        {getExpenseCategoryLabel(expense.category)}
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-stone-700">
                         {formatMoney(expense.amount)}
@@ -465,6 +528,21 @@ export function ExpenseManager({
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-stone-700">
                         {expense.included_in_monthly_cost ? "是" : "否"}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3">
+                        {expense.evidence_file ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              void handleViewEvidence(expense.evidence_file!)
+                            }
+                            className="text-sm font-medium text-pine hover:text-ink"
+                          >
+                            查看凭证
+                          </button>
+                        ) : (
+                          <span className="text-stone-400">-</span>
+                        )}
                       </td>
                       <td className="min-w-48 px-4 py-3 text-stone-700">
                         {expense.note || "-"}

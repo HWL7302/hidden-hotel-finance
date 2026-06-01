@@ -13,9 +13,12 @@
 
 - Implement income CRUD: completed in Phase 2A
 - Implement expense CRUD: completed in Phase 2B
-- Implement evidence upload to Supabase Storage
+- Implement inline evidence upload and archive viewing with Supabase Storage: completed in Phase 3A
+- Add OCR-assisted draft recognition with mandatory human confirmation
+- Add settlement spreadsheet and CSV import with mandatory human confirmation
 - Add role-aware navigation and access checks
-- Add basic monthly closing list and detail pages
+- Add read-only monthly operating summary: completed in Monthly Closing V1
+- Add monthly closing persistence, lock workflow, and detail pages
 - Add investor-only dashboard view
 
 ## Later Phases

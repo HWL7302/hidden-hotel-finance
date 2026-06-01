@@ -125,6 +125,26 @@ monthly closings, dividends, evidence files, and audit logs. Their application
 features remain deferred. Review their live policies before implementing each
 module; do not infer behavior from old local files.
 
+## Phase 3A Evidence Extension
+
+Run `supabase/phase-3-evidence-center.sql` once in the Supabase SQL Editor before
+testing the evidence center.
+
+The private bucket layout is:
+
+```text
+evidence-files/<store_id>/receipts/<yyyy>/<mm>/<uuid>.<extension>
+```
+
+The hidden administrator cleanup route is:
+
+```text
+/dashboard/dev-tools/cleanup
+```
+
+Use it only before production launch or when intentionally clearing development
+test data.
+
 ## Verification Checklist
 
 After a database-related change:
