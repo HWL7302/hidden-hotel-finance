@@ -98,6 +98,9 @@ create table public.investors (
   name text not null,
   email text,
   contact text,
+  permission_role text not null default 'viewer' check (
+    permission_role in ('viewer', 'operator', 'admin')
+  ),
   user_id uuid references auth.users(id),
   investment_amount numeric not null default 0 check (investment_amount >= 0),
   share_ratio numeric not null default 0,
@@ -109,12 +112,27 @@ create table public.investors (
   updated_at timestamptz not null default now()
 );
 
+create table public.store_finance_settings (
+  store_id uuid primary key references public.stores(id) on delete cascade,
+  investment_baseline numeric not null default 420000 check (investment_baseline > 0),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 create table public.investment_records (
   id uuid primary key default gen_random_uuid(),
   store_id uuid not null references public.stores(id),
   investor_id uuid not null references public.investors(id) on delete cascade,
   investment_type text not null check (
-    investment_type in ('cash', 'rent_equity', 'equipment', 'additional', 'withdrawal', 'transfer', 'other')
+    investment_type in (
+      'cash',
+      'rent_equity',
+      'equipment',
+      'additional',
+      'other',
+      'withdrawal',
+      'transfer'
+    )
   ),
   amount numeric not null default 0,
   share_ratio numeric not null default 0,
@@ -216,6 +234,7 @@ create index audit_logs_store_created_idx on public.audit_logs (store_id, create
 
 alter table public.stores enable row level security;
 alter table public.profiles enable row level security;
+alter table public.store_finance_settings enable row level security;
 alter table public.incomes enable row level security;
 alter table public.expenses enable row level security;
 alter table public.rooms enable row level security;
@@ -257,6 +276,7 @@ grant execute on function public.current_profile_role() to authenticated;
 grant execute on function public.current_profile_store_id() to authenticated;
 grant select on table public.profiles to authenticated;
 grant select on table public.stores to authenticated;
+grant select, insert, update on table public.store_finance_settings to authenticated;
 grant select, insert, update, delete on table public.incomes to authenticated;
 grant select, insert, update, delete on table public.expenses to authenticated;
 grant select, insert, update, delete on table public.investors to authenticated;
@@ -272,6 +292,29 @@ create policy "store select own"
   on public.stores for select
   to authenticated
   using (auth.uid() is not null and id = public.current_profile_store_id());
+
+create policy "store finance settings admin all"
+  on public.store_finance_settings for all
+  to authenticated
+  using (
+    auth.uid() is not null
+    and public.current_profile_role() = 'admin'
+    and public.current_profile_store_id() = store_id
+  )
+  with check (
+    auth.uid() is not null
+    and public.current_profile_role() = 'admin'
+    and public.current_profile_store_id() = store_id
+  );
+
+create policy "store finance settings select by store role"
+  on public.store_finance_settings for select
+  to authenticated
+  using (
+    auth.uid() is not null
+    and public.current_profile_role() in ('admin', 'operator', 'investor')
+    and public.current_profile_store_id() = store_id
+  );
 
 create policy "income select by store role"
   on public.incomes for select

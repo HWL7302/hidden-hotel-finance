@@ -66,3 +66,15 @@
 - Added automatic share ratio calculation: `amount / 420000 * 100`.
 - Added support for recording rent equity as investment data instead of operating expense.
 - Kept dividends, investor personal pages, and role-specific permission UI out of this version.
+- Updated investor management to V2.
+- Added `store_finance_settings` for adjustable per-store investment baseline.
+- Changed share calculation to use `amount / investment_baseline * 100`.
+- Removed withdrawal and transfer from the ordinary investment type selector.
+- Kept legacy withdrawal and transfer values database-compatible because live records already existed.
+- Removed the duplicate description field and kept notes as the only free-text field.
+- Changed investor summary from cards to a compact table.
+- Added fixed-height scrollable notes cells in the investment record table.
+- Added investor summary columns for contact, payback progress, and reserved permission display.
+- Added `investors.permission_role` as a reserved field with default `viewer`.
+- Kept permission changes as a placeholder button only; full role enforcement is not implemented yet.
+- Changed investor table amount cells to show numbers only, with `RMB` in table headers.

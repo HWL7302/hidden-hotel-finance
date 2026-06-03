@@ -5,7 +5,23 @@
 alter table public.investors
   add column if not exists email text,
   add column if not exists contact text,
+  add column if not exists permission_role text default 'viewer',
   add column if not exists notes text;
+
+update public.investors
+set permission_role = 'viewer'
+where permission_role is null;
+
+alter table public.investors
+  alter column permission_role set default 'viewer',
+  alter column permission_role set not null;
+
+alter table public.investors
+  drop constraint if exists investors_permission_role_check;
+
+alter table public.investors
+  add constraint investors_permission_role_check
+  check (permission_role in ('viewer', 'operator', 'admin'));
 
 alter table public.investors
   drop constraint if exists investors_share_ratio_check;
@@ -20,9 +36,9 @@ create table if not exists public.investment_records (
       'rent_equity',
       'equipment',
       'additional',
+      'other',
       'withdrawal',
-      'transfer',
-      'other'
+      'transfer'
     )
   ),
   amount numeric not null default 0,

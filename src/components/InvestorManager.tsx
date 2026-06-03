@@ -7,17 +7,26 @@ import {
   investmentTypeOptions
 } from "@/lib/finance-options";
 
-const initialInvestmentTotal = 420000;
-
 type InvestorRecord = {
   id: string;
   store_id: string;
   name: string;
   email: string | null;
   contact: string | null;
+  permission_role: string | null;
   notes: string | null;
   note: string | null;
   is_active: boolean;
+};
+
+type InvestorRelation = {
+  id: string;
+  name: string;
+  email: string | null;
+  contact: string | null;
+  permission_role: string | null;
+  notes: string | null;
+  note: string | null;
 };
 
 type InvestmentRecord = {
@@ -28,19 +37,9 @@ type InvestmentRecord = {
   amount: string | number;
   share_ratio: string | number;
   investment_date: string;
-  description: string | null;
   notes: string | null;
   created_at: string;
   investors?: InvestorRelation | null;
-};
-
-type InvestorRelation = {
-  id: string;
-  name: string;
-  email: string | null;
-  contact: string | null;
-  notes: string | null;
-  note: string | null;
 };
 
 type RawInvestmentRecord = Omit<InvestmentRecord, "investors"> & {
@@ -53,7 +52,6 @@ type InvestorFormState = {
   amount: string;
   investmentType: string;
   investmentDate: string;
-  description: string;
   notes: string;
 };
 
@@ -63,19 +61,30 @@ const emptyForm: InvestorFormState = {
   amount: "",
   investmentType: "cash",
   investmentDate: new Date().toISOString().slice(0, 10),
-  description: "",
   notes: ""
 };
 
 function formatMoney(value: number) {
-  return value.toLocaleString("zh-CN", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  });
+  const rounded = Math.round(value);
+  return `${rounded.toLocaleString("zh-CN")} RMB`;
+}
+
+function formatTableMoney(value: number) {
+  return Math.round(value).toLocaleString("zh-CN");
 }
 
 function formatPercent(value: number) {
   return `${value.toFixed(2)}%`;
+}
+
+function getPermissionRoleLabel(value: string | null | undefined) {
+  const labels: Record<string, string> = {
+    viewer: "仅查看",
+    operator: "经营方",
+    admin: "管理员"
+  };
+
+  return labels[value ?? "viewer"] ?? "仅查看";
 }
 
 function parseAmount(value: string | number | null) {
@@ -87,12 +96,16 @@ function parseAmount(value: string | number | null) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function calculateShareRatio(amount: string | number) {
-  return (parseAmount(amount) / initialInvestmentTotal) * 100;
+function calculateShareRatio(amount: string | number, baseline: number) {
+  if (baseline <= 0) {
+    return 0;
+  }
+
+  return (parseAmount(amount) / baseline) * 100;
 }
 
 function isValidAmount(value: string) {
-  return /^-?(0|[1-9]\d*)(\.\d{1,2})?$/.test(value);
+  return /^(0|[1-9]\d*)(\.\d{1,2})?$/.test(value);
 }
 
 export function InvestorManager({
@@ -107,98 +120,170 @@ export function InvestorManager({
   const supabase = useMemo(() => createClient(), []);
   const [investors, setInvestors] = useState<InvestorRecord[]>([]);
   const [records, setRecords] = useState<InvestmentRecord[]>([]);
+  const [baselineAmount, setBaselineAmount] = useState<number | null>(null);
+  const [baselineInput, setBaselineInput] = useState("");
   const [form, setForm] = useState<InvestorFormState>(emptyForm);
   const [editingRecordId, setEditingRecordId] = useState<string | null>(null);
   const [editingInvestorId, setEditingInvestorId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isSavingBaseline, setIsSavingBaseline] = useState(false);
   const [error, setError] = useState(storeLoadError);
   const [notice, setNotice] = useState("");
 
-  const calculatedShareRatio = calculateShareRatio(form.amount || "0");
+  const effectiveBaseline = baselineAmount ?? 0;
+  const calculatedShareRatio = calculateShareRatio(
+    form.amount || "0",
+    effectiveBaseline
+  );
 
   const totalRegisteredAmount = records.reduce(
     (sum, record) => sum + parseAmount(record.amount),
     0
   );
-  const totalRegisteredShare = records.reduce(
-    (sum, record) => sum + parseAmount(record.share_ratio),
-    0
+  const totalRegisteredShare = calculateShareRatio(
+    totalRegisteredAmount,
+    effectiveBaseline
   );
-  const remainingAmount = initialInvestmentTotal - totalRegisteredAmount;
+  const remainingAmount = effectiveBaseline - totalRegisteredAmount;
 
   const investorSummaries = useMemo(() => {
-    const summaryMap = new Map<string, { name: string; amount: number; share: number }>();
+    const summaryMap = new Map<
+      string,
+      {
+        id: string;
+        name: string;
+        amount: number;
+        share: number;
+        paybackProgress: number;
+        recordCount: number;
+        permissionRole: string;
+        contact: string;
+      }
+    >();
 
     for (const record of records) {
+      const investor =
+        record.investors ??
+        investors.find((currentInvestor) => currentInvestor.id === record.investor_id) ??
+        null;
       const investorName =
-        record.investors?.name ??
-        investors.find((investor) => investor.id === record.investor_id)?.name ??
+        investor?.name ??
         "未命名投资人";
       const current = summaryMap.get(record.investor_id) ?? {
+        id: record.investor_id,
         name: investorName,
         amount: 0,
-        share: 0
+        share: 0,
+        paybackProgress: 0,
+        recordCount: 0,
+        permissionRole: investor?.permission_role ?? "viewer",
+        contact: investor?.email ?? investor?.contact ?? "-"
       };
 
       current.amount += parseAmount(record.amount);
-      current.share += parseAmount(record.share_ratio);
+      current.share = calculateShareRatio(current.amount, effectiveBaseline);
+      current.paybackProgress = 0;
+      current.recordCount += 1;
+      current.permissionRole = investor?.permission_role ?? "viewer";
+      current.contact = investor?.email ?? investor?.contact ?? "-";
       summaryMap.set(record.investor_id, current);
     }
 
     return Array.from(summaryMap.values()).sort((a, b) => b.amount - a.amount);
-  }, [investors, records]);
+  }, [effectiveBaseline, investors, records]);
+
+  async function ensureFinanceSettings() {
+    if (!defaultStoreId) {
+      return null;
+    }
+
+    const { data: existingSetting, error: loadError } = await supabase
+      .from("store_finance_settings")
+      .select("investment_baseline")
+      .eq("store_id", defaultStoreId)
+      .maybeSingle();
+
+    if (loadError) {
+      throw loadError;
+    }
+
+    if (existingSetting) {
+      return parseAmount(existingSetting.investment_baseline);
+    }
+
+    const { data: createdSetting, error: insertError } = await supabase
+      .from("store_finance_settings")
+      .insert({ store_id: defaultStoreId })
+      .select("investment_baseline")
+      .single();
+
+    if (insertError) {
+      throw insertError;
+    }
+
+    return parseAmount(createdSetting.investment_baseline);
+  }
 
   async function loadInvestors() {
     setError("");
     setNotice("");
     setIsLoading(true);
 
-    let investorQuery = supabase
-      .from("investors")
-      .select("id,store_id,name,email,contact,notes,note,is_active")
-      .eq("is_active", true)
-      .order("created_at", { ascending: false });
+    try {
+      const loadedBaseline = await ensureFinanceSettings();
 
-    let recordQuery = supabase
-      .from("investment_records")
-      .select(
-        "id,store_id,investor_id,investment_type,amount,share_ratio,investment_date,description,notes,created_at,investors(id,name,email,contact,notes,note)"
-      )
-      .order("investment_date", { ascending: false })
-      .order("created_at", { ascending: false });
+      if (loadedBaseline !== null) {
+        setBaselineAmount(loadedBaseline);
+        setBaselineInput(String(Math.round(loadedBaseline)));
+      }
 
-    if (defaultStoreId) {
-      investorQuery = investorQuery.eq("store_id", defaultStoreId);
-      recordQuery = recordQuery.eq("store_id", defaultStoreId);
+      let investorQuery = supabase
+        .from("investors")
+        .select("id,store_id,name,email,contact,permission_role,notes,note,is_active")
+        .eq("is_active", true)
+        .order("created_at", { ascending: false });
+
+      let recordQuery = supabase
+        .from("investment_records")
+        .select(
+          "id,store_id,investor_id,investment_type,amount,share_ratio,investment_date,notes,created_at,investors(id,name,email,contact,permission_role,notes,note)"
+        )
+        .order("investment_date", { ascending: false })
+        .order("created_at", { ascending: false });
+
+      if (defaultStoreId) {
+        investorQuery = investorQuery.eq("store_id", defaultStoreId);
+        recordQuery = recordQuery.eq("store_id", defaultStoreId);
+      }
+
+      const [investorResult, recordResult] = await Promise.all([
+        investorQuery,
+        recordQuery
+      ]);
+
+      if (investorResult.error) {
+        throw investorResult.error;
+      }
+
+      if (recordResult.error) {
+        throw recordResult.error;
+      }
+
+      setInvestors((investorResult.data ?? []) as InvestorRecord[]);
+      setRecords(
+        ((recordResult.data ?? []) as RawInvestmentRecord[]).map((record) => ({
+          ...record,
+          investors: Array.isArray(record.investors)
+            ? record.investors[0] ?? null
+            : record.investors ?? null
+        }))
+      );
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : "加载失败。");
+    } finally {
+      setIsLoading(false);
     }
-
-    const [investorResult, recordResult] = await Promise.all([
-      investorQuery,
-      recordQuery
-    ]);
-
-    setIsLoading(false);
-
-    if (investorResult.error) {
-      setError(investorResult.error.message);
-      return;
-    }
-
-    if (recordResult.error) {
-      setError(recordResult.error.message);
-      return;
-    }
-
-    setInvestors((investorResult.data ?? []) as InvestorRecord[]);
-    setRecords(
-      ((recordResult.data ?? []) as RawInvestmentRecord[]).map((record) => ({
-        ...record,
-        investors: Array.isArray(record.investors)
-          ? record.investors[0] ?? null
-          : record.investors ?? null
-      }))
-    );
   }
 
   useEffect(() => {
@@ -230,7 +315,6 @@ export function InvestorManager({
       amount: String(record.amount ?? ""),
       investmentType: record.investment_type,
       investmentDate: record.investment_date,
-      description: record.description ?? "",
       notes: record.notes ?? record.investors?.notes ?? record.investors?.note ?? ""
     });
     setError("");
@@ -249,7 +333,8 @@ export function InvestorManager({
           name: form.investorName.trim(),
           email: form.contact.trim() || null,
           contact: form.contact.trim() || null,
-          notes: form.notes.trim() || null
+          notes: form.notes.trim() || null,
+          note: form.notes.trim() || null
         })
         .eq("id", editingInvestorId);
 
@@ -280,6 +365,7 @@ export function InvestorManager({
         contact: form.contact.trim() || null,
         investment_amount: amount,
         share_ratio: calculatedShareRatio / 100,
+        permission_role: "viewer",
         notes: form.notes.trim() || null,
         note: form.notes.trim() || null,
         is_active: true
@@ -294,7 +380,7 @@ export function InvestorManager({
     return data.id as string;
   }
 
-  async function updateInvestorTotals(investorId: string) {
+  async function updateInvestorTotals(investorId: string, baseline: number) {
     const { data, error: recordsError } = await supabase
       .from("investment_records")
       .select("amount")
@@ -313,12 +399,72 @@ export function InvestorManager({
       .from("investors")
       .update({
         investment_amount: totalAmount,
-        share_ratio: totalAmount / initialInvestmentTotal
+        share_ratio: calculateShareRatio(totalAmount, baseline) / 100
       })
       .eq("id", investorId);
 
     if (updateError) {
       throw updateError;
+    }
+  }
+
+  async function updateAllShareRatios(nextBaseline: number) {
+    const investorIds = Array.from(new Set(records.map((record) => record.investor_id)));
+
+    await Promise.all(
+      records.map((record) =>
+        supabase
+          .from("investment_records")
+          .update({
+            share_ratio: calculateShareRatio(record.amount, nextBaseline)
+          })
+          .eq("id", record.id)
+      )
+    );
+
+    await Promise.all(
+      investorIds.map((investorId) => updateInvestorTotals(investorId, nextBaseline))
+    );
+  }
+
+  async function handleBaselineSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError("");
+    setNotice("");
+
+    if (!defaultStoreId) {
+      setError("当前账号未绑定门店，无法保存项目总投资基准。");
+      return;
+    }
+
+    if (!isValidAmount(baselineInput) || parseAmount(baselineInput) <= 0) {
+      setError("请填写大于 0 的项目总投资基准金额。");
+      return;
+    }
+
+    const nextBaseline = parseAmount(baselineInput);
+    setIsSavingBaseline(true);
+
+    try {
+      const { error: upsertError } = await supabase
+        .from("store_finance_settings")
+        .upsert({
+          store_id: defaultStoreId,
+          investment_baseline: nextBaseline
+        });
+
+      if (upsertError) {
+        throw upsertError;
+      }
+
+      await updateAllShareRatios(nextBaseline);
+      setBaselineAmount(nextBaseline);
+      setNotice("项目总投资基准已更新，持股比例已按新基准重新计算。");
+      await loadInvestors();
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : "保存失败。");
+    } finally {
+      setIsSavingBaseline(false);
     }
   }
 
@@ -342,8 +488,18 @@ export function InvestorManager({
       return;
     }
 
+    if (form.investmentType === "other" && !form.notes.trim()) {
+      setError("投资类型为其他时，请在备注中填写具体说明。");
+      return;
+    }
+
     if (!defaultStoreId) {
       setError("当前账号未绑定门店，无法保存投资记录。");
+      return;
+    }
+
+    if (!baselineAmount || baselineAmount <= 0) {
+      setError("请先设置有效的项目总投资基准。");
       return;
     }
 
@@ -358,7 +514,7 @@ export function InvestorManager({
         amount: form.amount,
         share_ratio: calculatedShareRatio,
         investment_date: form.investmentDate,
-        description: form.description.trim() || null,
+        description: null,
         notes: form.notes.trim() || null
       };
 
@@ -373,7 +529,7 @@ export function InvestorManager({
         throw result.error;
       }
 
-      await updateInvestorTotals(investorId);
+      await updateInvestorTotals(investorId, baselineAmount);
       setNotice(editingRecordId ? "投资记录已更新。" : "投资记录已新增。");
       resetForm();
       await loadInvestors();
@@ -407,7 +563,7 @@ export function InvestorManager({
     }
 
     try {
-      await updateInvestorTotals(record.investor_id);
+      await updateInvestorTotals(record.investor_id, effectiveBaseline);
     } catch (updateError) {
       setError(
         updateError instanceof Error
@@ -421,6 +577,12 @@ export function InvestorManager({
     await loadInvestors();
   }
 
+  function handlePermissionClick() {
+    window.alert(
+      "权限功能预留中，后续将支持按角色控制可查看内容和可操作功能。"
+    );
+  }
+
   return (
     <section>
       <div>
@@ -431,7 +593,10 @@ export function InvestorManager({
       </div>
 
       <div className="mt-6 grid gap-4 md:grid-cols-4">
-        <SummaryCard title="初始总投资" value="420,000 RMB" />
+        <SummaryCard
+          title="项目总投资基准"
+          value={baselineAmount === null ? "未设置" : formatMoney(baselineAmount)}
+        />
         <SummaryCard
           title="当前登记投资额"
           value={formatMoney(totalRegisteredAmount)}
@@ -447,9 +612,37 @@ export function InvestorManager({
         />
       </div>
 
+      <form
+        onSubmit={handleBaselineSubmit}
+        className="mt-4 flex flex-col gap-3 rounded-lg border border-stone-200 bg-white p-4 shadow-sm md:flex-row md:items-end"
+      >
+        <label className="block md:w-72">
+          <span className="text-sm font-medium text-stone-700">
+            修改项目总投资基准
+          </span>
+          <input
+            value={baselineInput}
+            onChange={(event) => setBaselineInput(event.target.value)}
+            inputMode="decimal"
+            className="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm outline-none focus:border-pine"
+            placeholder="例如 420000"
+          />
+        </label>
+        <button
+          type="submit"
+          disabled={isSavingBaseline}
+          className="rounded-md bg-pine px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {isSavingBaseline ? "保存中..." : "保存基准金额"}
+        </button>
+        <p className="text-sm text-stone-500">
+          持股比例 = 投资金额 / 项目总投资基准 x 100
+        </p>
+      </form>
+
       {remainingAmount < 0 ? (
         <p className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          当前登记投资额已超过初始总投资，请确认是否属于追加投资、股权调整或录入错误。
+          当前登记投资额已超过基准金额，请确认是否属于追加投资或录入错误。
         </p>
       ) : null}
 
@@ -545,7 +738,7 @@ export function InvestorManager({
 
             {form.investmentType === "rent_equity" ? (
               <div className="rounded-md border border-brass/30 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">
-                房租入股将作为投资记录处理，不计入前两年实际支出。本项目房东示例：5,000 RMB/月 x 24 个月 = 120,000 RMB 永久股权。
+                房租入股将作为投资记录处理，不计入前两年实际支出。例如：5000/月 x 24 个月，永久股权。
               </div>
             ) : null}
 
@@ -565,20 +758,12 @@ export function InvestorManager({
             </label>
 
             <label className="block">
-              <span className="text-sm font-medium text-stone-700">说明</span>
-              <textarea
-                value={form.description}
-                onChange={(event) => updateForm("description", event.target.value)}
-                className="mt-1 min-h-20 w-full rounded-md border border-stone-300 px-3 py-2 text-sm outline-none focus:border-pine"
-              />
-            </label>
-
-            <label className="block">
               <span className="text-sm font-medium text-stone-700">备注</span>
               <textarea
                 value={form.notes}
                 onChange={(event) => updateForm("notes", event.target.value)}
-                className="mt-1 min-h-20 w-full rounded-md border border-stone-300 px-3 py-2 text-sm outline-none focus:border-pine"
+                className="mt-1 min-h-24 w-full rounded-md border border-stone-300 px-3 py-2 text-sm outline-none focus:border-pine"
+                placeholder="例如：房租入股，5000/月 x 24个月，永久股权。"
               />
             </label>
 
@@ -588,7 +773,7 @@ export function InvestorManager({
                 {formatPercent(calculatedShareRatio)}
               </span>
               <p className="mt-1 text-xs text-stone-500">
-                计算公式：投资金额 / 420000 x 100。分红暂缓领取不会自动增加股份比例。
+                计算公式：投资金额 / 项目总投资基准 x 100。分红暂缓领取不会自动增加股份比例。
               </p>
             </div>
 
@@ -603,27 +788,56 @@ export function InvestorManager({
         </form>
 
         <div className="space-y-6">
-          <div className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
-            <h3 className="text-lg font-semibold text-ink">投资人汇总</h3>
-            <div className="mt-4 grid gap-3 md:grid-cols-2">
-              {investorSummaries.length === 0 ? (
-                <p className="text-sm text-stone-500">暂无投资人汇总。</p>
-              ) : (
-                investorSummaries.map((summary) => (
-                  <div
-                    key={summary.name}
-                    className="rounded-md border border-stone-200 bg-paper px-4 py-3"
-                  >
-                    <p className="font-medium text-ink">{summary.name}</p>
-                    <p className="mt-1 text-sm text-stone-600">
-                      累计投资：{formatMoney(summary.amount)}
-                    </p>
-                    <p className="text-sm text-stone-600">
-                      当前持股：{formatPercent(summary.share)}
-                    </p>
-                  </div>
-                ))
-              )}
+          <div className="overflow-hidden rounded-lg border border-stone-200 bg-white shadow-sm">
+            <div className="border-b border-stone-200 px-5 py-4">
+              <h3 className="text-lg font-semibold text-ink">投资人汇总</h3>
+            </div>
+            <div className="overflow-hidden">
+              <table className="w-full table-fixed divide-y divide-stone-200 text-sm">
+                <thead className="bg-paper text-left text-stone-600">
+                  <tr>
+                    <TableHead>投资人姓名</TableHead>
+                    <TableHead>累计投资金额（RMB）</TableHead>
+                    <TableHead>当前持股比例</TableHead>
+                    <TableHead>回本进度</TableHead>
+                    <TableHead>投资记录数</TableHead>
+                    <TableHead>权限</TableHead>
+                    <TableHead>联系方式</TableHead>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-stone-100">
+                  {investorSummaries.length === 0 ? (
+                    <tr>
+                      <td className="px-4 py-6 text-stone-500" colSpan={7}>
+                        暂无投资人汇总。
+                      </td>
+                    </tr>
+                  ) : (
+                    investorSummaries.map((summary) => (
+                      <tr key={summary.id}>
+                        <TableCell>{summary.name}</TableCell>
+                        <TableCell>{formatTableMoney(summary.amount)}</TableCell>
+                        <TableCell>{formatPercent(summary.share)}</TableCell>
+                        <TableCell>{formatPercent(summary.paybackProgress)}</TableCell>
+                        <TableCell>{summary.recordCount}</TableCell>
+                        <td className="px-4 py-3 text-stone-700">
+                          <div className="flex flex-col gap-1">
+                            <span>{getPermissionRoleLabel(summary.permissionRole)}</span>
+                            <button
+                              type="button"
+                              onClick={handlePermissionClick}
+                              className="w-fit text-sm font-medium text-pine hover:underline"
+                            >
+                              修改权限
+                            </button>
+                          </div>
+                        </td>
+                        <TableCell>{summary.contact || "-"}</TableCell>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
 
@@ -634,47 +848,51 @@ export function InvestorManager({
               </h3>
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-stone-200 text-sm">
+            <div className="overflow-hidden">
+              <table className="w-full table-fixed divide-y divide-stone-200 text-sm">
                 <thead className="bg-paper text-left text-stone-600">
                   <tr>
-                    <TableHead>投资人姓名</TableHead>
-                    <TableHead>投资类型</TableHead>
-                    <TableHead>投资金额</TableHead>
-                    <TableHead>当前持股比例</TableHead>
-                    <TableHead>投资日期</TableHead>
-                    <TableHead>说明</TableHead>
-                    <TableHead>备注</TableHead>
-                    <TableHead>操作</TableHead>
+                    <TableHead className="w-28">投资人姓名</TableHead>
+                    <TableHead className="w-24">投资类型</TableHead>
+                    <TableHead className="w-28">投资金额（RMB）</TableHead>
+                    <TableHead className="w-28">当前持股比例</TableHead>
+                    <TableHead className="w-28">投资日期</TableHead>
+                    <TableHead className="w-64">备注</TableHead>
+                    <TableHead className="w-24">操作</TableHead>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-stone-100">
                   {isLoading ? (
                     <tr>
-                      <td className="px-4 py-6 text-stone-500" colSpan={8}>
+                      <td className="px-4 py-6 text-stone-500" colSpan={7}>
                         正在加载投资记录...
                       </td>
                     </tr>
                   ) : records.length === 0 ? (
                     <tr>
-                      <td className="px-4 py-6 text-stone-500" colSpan={8}>
+                      <td className="px-4 py-6 text-stone-500" colSpan={7}>
                         暂无投资记录。
                       </td>
                     </tr>
                   ) : (
                     records.map((record) => (
-                      <tr key={record.id}>
+                      <tr key={record.id} className="align-top">
                         <TableCell>{record.investors?.name ?? "-"}</TableCell>
                         <TableCell>
                           {getInvestmentTypeLabel(record.investment_type)}
                         </TableCell>
-                        <TableCell>{formatMoney(parseAmount(record.amount))}</TableCell>
+                        <TableCell>{formatTableMoney(parseAmount(record.amount))}</TableCell>
                         <TableCell>
-                          {formatPercent(parseAmount(record.share_ratio))}
+                          {formatPercent(
+                            calculateShareRatio(record.amount, effectiveBaseline)
+                          )}
                         </TableCell>
                         <TableCell>{record.investment_date}</TableCell>
-                        <TableCell>{record.description || "-"}</TableCell>
-                        <TableCell>{record.notes || "-"}</TableCell>
+                        <td className="px-4 py-3 text-stone-700">
+                          <div className="max-h-20 w-full overflow-y-auto whitespace-pre-wrap break-words pr-2">
+                            {record.notes || "-"}
+                          </div>
+                        </td>
                         <TableCell>
                           <div className="flex gap-2">
                             <button
@@ -727,12 +945,20 @@ function SummaryCard({
   );
 }
 
-function TableHead({ children }: { children: React.ReactNode }) {
-  return (
-    <th className="whitespace-nowrap px-4 py-3 font-semibold">{children}</th>
-  );
+function TableHead({
+  children,
+  className = ""
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return <th className={`px-4 py-3 font-semibold ${className}`}>{children}</th>;
 }
 
 function TableCell({ children }: { children: React.ReactNode }) {
-  return <td className="whitespace-nowrap px-4 py-3 text-stone-700">{children}</td>;
+  return (
+    <td className="truncate px-4 py-3 text-stone-700" title={String(children ?? "")}>
+      {children}
+    </td>
+  );
 }

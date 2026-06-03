@@ -5,6 +5,7 @@ The database is hosted in Supabase Postgres. The schema is stored in `supabase/s
 ## Tables
 
 - `stores`: hotel store records.
+- `store_finance_settings`: per-store finance settings such as investment baseline.
 - `profiles`: application profiles linked to Supabase Auth users.
 - `incomes`: income records.
 - `expenses`: expense records.
@@ -49,14 +50,16 @@ Future OCR and import work should extend evidence processing around the stored
 file path. It should create a reviewable draft and require human confirmation
 before writing income or expense records.
 
-## Investor Management V1
+## Investor Management V2
 
-The initial total investment baseline is fixed at `420,000 RMB`.
+The project investment baseline is stored in `store_finance_settings`.
+The default database value is `420,000 RMB`, but administrators can update it
+from the investor management page.
 
 Investor ownership is calculated from investment records:
 
 ```text
-share_ratio = investment_records.amount / 420000 * 100
+share_ratio = investment_records.amount / store_finance_settings.investment_baseline * 100
 ```
 
 The frontend calculates this value automatically. Users do not manually enter
@@ -67,6 +70,9 @@ share ratio.
 - `name`
 - `email`
 - `contact`
+- `permission_role`: reserved page-level permission label, default `viewer`.
+  Allowed values are `viewer`, `operator`, and `admin`. This is not the full
+  access-control source yet.
 - `notes`
 - `is_active`
 
@@ -77,18 +83,25 @@ share ratio.
 - `amount`
 - `share_ratio`
 - `investment_date`
-- `description`
 - `notes`
 
-Supported `investment_type` values:
+The legacy `description` column may exist for compatibility, but Investor
+Management V2 no longer exposes a description field. All free-form text should
+go into `notes`.
+
+Current ordinary `investment_type` values:
 
 - `cash`
 - `rent_equity`
 - `equipment`
 - `additional`
-- `withdrawal`
-- `transfer`
 - `other`
+
+Withdrawal and transfer are intentionally not ordinary investment record types
+in V2. They require a future equity-change workflow. The database constraint
+still allows legacy `withdrawal` and `transfer` values so existing records do
+not break, but the investor management page does not offer them as selectable
+types.
 
 Rent equity is recorded as investment data, not as an operating expense for the
 first two years. The current business example is:
@@ -99,6 +112,13 @@ first two years. The current business example is:
 
 Deferred dividends do not automatically become equity and must not change
 `share_ratio` without an explicit investment or share-change record.
+
+Investor summary currently shows payback progress as `0%` because the dividend
+record workflow is not implemented yet. The future calculation is:
+
+```text
+payback_progress = total_dividend_received / investment_amount * 100
+```
 
 ## Roles
 

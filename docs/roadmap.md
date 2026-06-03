@@ -18,7 +18,9 @@
 - Add settlement spreadsheet and CSV import with mandatory human confirmation
 - Add role-aware navigation and access checks
 - Add read-only monthly operating summary: completed in Monthly Closing V1
-- Add administrator investor management V1: completed
+- Add administrator investor management V1/V2 and summary-field refinements: completed
+- Add real investor permission enforcement: TODO
+- Add real investor payback progress from dividend records: TODO
 - Add monthly closing persistence, lock workflow, and detail pages
 - Add investor-only dashboard view
 
