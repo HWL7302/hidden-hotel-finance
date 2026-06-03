@@ -41,3 +41,17 @@ export function getIncomeSourceLabel(value: string) {
 export function getExpenseCategoryLabel(value: string) {
   return findLabel(expenseCategoryOptions, value);
 }
+
+export const investmentTypeOptions = [
+  { value: "cash", label: "现金投资" },
+  { value: "rent_equity", label: "房租入股" },
+  { value: "equipment", label: "设备入股" },
+  { value: "additional", label: "追加投资" },
+  { value: "withdrawal", label: "退股" },
+  { value: "transfer", label: "股权转让" },
+  { value: "other", label: "其他" }
+];
+
+export function getInvestmentTypeLabel(value: string) {
+  return findLabel(investmentTypeOptions, value);
+}

@@ -54,3 +54,15 @@
 - Summarized income by `settlement_period` and expense by `date`, while counting only expenses marked `included_in_monthly_cost`.
 - Added monthly income, expense, net profit, evidence completeness, income-source, and expense-category summaries. Evidence completeness covers all monthly income and expense records; expense totals include only records marked as monthly cost.
 - Kept dividend calculation, month locking, monthly closing writes, and export outside the first monthly closing scope.
+
+## 2026-06-03
+
+- Started investor management V1 for the administrator view.
+- Added `supabase/phase-4-investor-management.sql` for investor profile fields and `investment_records`.
+- Updated `supabase/schema.sql` with the investor management baseline.
+- Added investment type options with Chinese display labels.
+- Replaced the investor placeholder page with a working investor management page.
+- Added fixed initial total investment baseline: `420,000 RMB`.
+- Added automatic share ratio calculation: `amount / 420000 * 100`.
+- Added support for recording rent equity as investment data instead of operating expense.
+- Kept dividends, investor personal pages, and role-specific permission UI out of this version.

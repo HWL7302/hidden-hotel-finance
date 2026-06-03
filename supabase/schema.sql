@@ -96,12 +96,31 @@ create table public.investors (
   id uuid primary key default gen_random_uuid(),
   store_id uuid not null references public.stores(id),
   name text not null,
+  email text,
+  contact text,
   user_id uuid references auth.users(id),
   investment_amount numeric not null default 0 check (investment_amount >= 0),
-  share_ratio numeric not null default 0 check (share_ratio >= 0 and share_ratio <= 1),
+  share_ratio numeric not null default 0,
   total_dividend_received numeric not null default 0 check (total_dividend_received >= 0),
   note text,
+  notes text,
   is_active boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table public.investment_records (
+  id uuid primary key default gen_random_uuid(),
+  store_id uuid not null references public.stores(id),
+  investor_id uuid not null references public.investors(id) on delete cascade,
+  investment_type text not null check (
+    investment_type in ('cash', 'rent_equity', 'equipment', 'additional', 'withdrawal', 'transfer', 'other')
+  ),
+  amount numeric not null default 0,
+  share_ratio numeric not null default 0,
+  investment_date date not null default current_date,
+  description text,
+  notes text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -187,6 +206,8 @@ create index incomes_store_date_idx on public.incomes (store_id, date);
 create index expenses_store_date_idx on public.expenses (store_id, date);
 create index rooms_store_status_idx on public.rooms (store_id, status);
 create index investors_store_active_idx on public.investors (store_id, is_active);
+create index investment_records_store_date_idx on public.investment_records (store_id, investment_date desc);
+create index investment_records_investor_idx on public.investment_records (investor_id);
 create index monthly_closings_store_month_idx on public.monthly_closings (store_id, month);
 create index dividends_investor_idx on public.dividends (investor_id);
 create index dividends_store_month_idx on public.dividends (store_id, month);
@@ -199,6 +220,7 @@ alter table public.incomes enable row level security;
 alter table public.expenses enable row level security;
 alter table public.rooms enable row level security;
 alter table public.investors enable row level security;
+alter table public.investment_records enable row level security;
 alter table public.monthly_closings enable row level security;
 alter table public.dividends enable row level security;
 alter table public.evidence_files enable row level security;
@@ -237,6 +259,8 @@ grant select on table public.profiles to authenticated;
 grant select on table public.stores to authenticated;
 grant select, insert, update, delete on table public.incomes to authenticated;
 grant select, insert, update, delete on table public.expenses to authenticated;
+grant select, insert, update, delete on table public.investors to authenticated;
+grant select, insert, update, delete on table public.investment_records to authenticated;
 grant select, insert, delete on table public.evidence_files to authenticated;
 
 create policy "profile select own"
@@ -330,6 +354,34 @@ create policy "expense delete by admin operator"
   using (
     auth.uid() is not null
     and public.current_profile_role() in ('admin', 'operator')
+    and public.current_profile_store_id() = store_id
+  );
+
+create policy "investors admin all"
+  on public.investors for all
+  to authenticated
+  using (
+    auth.uid() is not null
+    and public.current_profile_role() = 'admin'
+    and public.current_profile_store_id() = store_id
+  )
+  with check (
+    auth.uid() is not null
+    and public.current_profile_role() = 'admin'
+    and public.current_profile_store_id() = store_id
+  );
+
+create policy "investment records admin all"
+  on public.investment_records for all
+  to authenticated
+  using (
+    auth.uid() is not null
+    and public.current_profile_role() = 'admin'
+    and public.current_profile_store_id() = store_id
+  )
+  with check (
+    auth.uid() is not null
+    and public.current_profile_role() = 'admin'
     and public.current_profile_store_id() = store_id
   );
 

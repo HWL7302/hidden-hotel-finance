@@ -10,6 +10,7 @@ The database is hosted in Supabase Postgres. The schema is stored in `supabase/s
 - `expenses`: expense records.
 - `rooms`: long-term room and monthly rental records.
 - `investors`: investor records.
+- `investment_records`: investor capital contribution and share-change records.
 - `monthly_closings`: monthly financial closing records.
 - `dividends`: investor dividend records.
 - `evidence_files`: metadata for files stored in Supabase Storage.
@@ -47,6 +48,57 @@ The existing schema also reserves metadata values for future import formats.
 Future OCR and import work should extend evidence processing around the stored
 file path. It should create a reviewable draft and require human confirmation
 before writing income or expense records.
+
+## Investor Management V1
+
+The initial total investment baseline is fixed at `420,000 RMB`.
+
+Investor ownership is calculated from investment records:
+
+```text
+share_ratio = investment_records.amount / 420000 * 100
+```
+
+The frontend calculates this value automatically. Users do not manually enter
+share ratio.
+
+`investors` stores investor profile data:
+
+- `name`
+- `email`
+- `contact`
+- `notes`
+- `is_active`
+
+`investment_records` stores each investment or share-change event:
+
+- `investor_id`
+- `investment_type`
+- `amount`
+- `share_ratio`
+- `investment_date`
+- `description`
+- `notes`
+
+Supported `investment_type` values:
+
+- `cash`
+- `rent_equity`
+- `equipment`
+- `additional`
+- `withdrawal`
+- `transfer`
+- `other`
+
+Rent equity is recorded as investment data, not as an operating expense for the
+first two years. The current business example is:
+
+```text
+5,000 RMB/month * 24 months = 120,000 RMB permanent equity
+```
+
+Deferred dividends do not automatically become equity and must not change
+`share_ratio` without an explicit investment or share-change record.
 
 ## Roles
 

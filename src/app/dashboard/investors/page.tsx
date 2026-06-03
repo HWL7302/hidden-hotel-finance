@@ -1,10 +1,36 @@
-import { ModulePlaceholder } from "@/components/ModulePlaceholder";
+import { InvestorManager } from "@/components/InvestorManager";
+import { createClient } from "@/lib/supabase-server";
 
-export default function InvestorsPage() {
+export default async function InvestorsPage() {
+  const supabase = await createClient();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+
+  let defaultStoreId: string | null = null;
+  let currentRole = "";
+  let storeLoadError = "";
+
+  if (user) {
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("store_id,role")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (profileError) {
+      storeLoadError = profileError.message;
+    }
+
+    defaultStoreId = profile?.store_id ?? null;
+    currentRole = profile?.role ?? "";
+  }
+
   return (
-    <ModulePlaceholder
-      title="投资人管理"
-      description="管理员可查看全部投资人；投资人后续仅能查看自己的投资金额、持股比例、应分红、已分红和回本进度。"
+    <InvestorManager
+      currentRole={currentRole}
+      defaultStoreId={defaultStoreId}
+      storeLoadError={storeLoadError}
     />
   );
 }

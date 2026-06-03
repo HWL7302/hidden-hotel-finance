@@ -18,6 +18,7 @@
 - Add settlement spreadsheet and CSV import with mandatory human confirmation
 - Add role-aware navigation and access checks
 - Add read-only monthly operating summary: completed in Monthly Closing V1
+- Add administrator investor management V1: completed
 - Add monthly closing persistence, lock workflow, and detail pages
 - Add investor-only dashboard view
 
