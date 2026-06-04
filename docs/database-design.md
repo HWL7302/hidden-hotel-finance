@@ -14,6 +14,7 @@ The database is hosted in Supabase Postgres. The schema is stored in `supabase/s
 - `investment_records`: investor capital contribution and share-change records.
 - `monthly_closings`: monthly financial closing records.
 - `dividends`: investor dividend records.
+- `dividend_records`: current dividend workflow records for monthly expected and paid dividends.
 - `evidence_files`: metadata for files stored in Supabase Storage.
 - `audit_logs`: immutable audit trail for sensitive changes.
 
@@ -113,12 +114,54 @@ first two years. The current business example is:
 Deferred dividends do not automatically become equity and must not change
 `share_ratio` without an explicit investment or share-change record.
 
-Investor summary currently shows payback progress as `0%` because the dividend
-record workflow is not implemented yet. The future calculation is:
+Investor summary payback progress reads paid dividend records by `investor_id`.
+Only `dividend_records.status = 'paid'` rows are included:
 
 ```text
-payback_progress = total_dividend_received / investment_amount * 100
+payback_progress = paid_dividend_records.paid_amount_sum / investment_records.amount_sum * 100
 ```
+
+## Dividend Records V1
+
+The active dividend workflow uses `dividend_records`, not the legacy `dividends`
+table. The legacy table remains in the schema for compatibility with the initial
+database design.
+
+`dividend_records` stores one row per investor per month:
+
+- `store_id`
+- `settlement_month`
+- `investor_id`
+- `investor_name`
+- `share_ratio`
+- `expected_amount`
+- `paid_amount`
+- `status`
+- `paid_date`
+- `receipt_id`
+- `notes`
+
+The status values are:
+
+- `unpaid`: not paid
+- `paid`: paid
+- `deferred`: payment deferred
+
+Dividend V1 generation rules:
+
+```text
+distributable_profit = max(monthly_net_profit, 0)
+expected_amount = distributable_profit * investor.share_ratio
+```
+
+Monthly net profit is calculated with the same rules as Monthly Closing V1:
+
+- income uses `incomes.settlement_period` and sums `net_amount`
+- expenses use `expenses.date`
+- only expenses with `included_in_monthly_cost = true` are included
+
+V1 does not upload dividend evidence yet. `receipt_id` is reserved for future
+linking to `evidence_files`.
 
 ## Roles
 

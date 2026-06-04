@@ -78,3 +78,22 @@
 - Added `investors.permission_role` as a reserved field with default `viewer`.
 - Kept permission changes as a placeholder button only; full role enforcement is not implemented yet.
 - Changed investor table amount cells to show numbers only, with `RMB` in table headers.
+
+## 2026-06-04
+
+- Started dividend records V1.
+- Added `supabase/phase-4-dividend-records.sql` for `dividend_records`.
+- Replaced the dividend placeholder page with a working monthly dividend records page.
+- Added monthly selector, net-profit summary cards, and dividend generation.
+- Dividend generation uses Monthly Closing V1 rules: income by `settlement_period`, expenses by `date`, and only expenses included in monthly cost.
+- Added dividend statuses: `unpaid`, `paid`, and `deferred`.
+- Added editing for paid amount, status, paid date, and notes.
+- Added validation requiring notes when paid amount differs from expected amount.
+- Reserved `receipt_id` for future dividend evidence linking; no upload workflow was added.
+- Kept export, approval flow, and full permission control out of this version.
+- Replaced month filters with reusable picker-backed month inputs on income, expense, monthly closing, and dividend pages.
+- Replaced transaction and investment date fields with reusable picker-backed date inputs.
+- Fixed income and expense form reset so new transaction dates return to today, not the first day of the selected month.
+- Wired investor payback progress to paid `dividend_records` totals by `investor_id`.
+- Locked Next.js and `eslint-config-next` to `15.3.2` after `15.5.18` repeatedly corrupted the dev React Client Manifest on Windows.
+- Replaced the dev script with `scripts/dev-server.mjs`, which clears `.next` before starting Next.js.

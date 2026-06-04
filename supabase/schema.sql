@@ -183,6 +183,24 @@ create table public.dividends (
   updated_at timestamptz not null default now()
 );
 
+create table public.dividend_records (
+  id uuid primary key default gen_random_uuid(),
+  store_id uuid not null references public.stores(id) on delete cascade,
+  settlement_month date not null check (date_trunc('month', settlement_month)::date = settlement_month),
+  investor_id uuid not null references public.investors(id) on delete cascade,
+  investor_name text not null,
+  share_ratio numeric not null default 0 check (share_ratio >= 0),
+  expected_amount numeric not null default 0 check (expected_amount >= 0),
+  paid_amount numeric not null default 0 check (paid_amount >= 0),
+  status text not null default 'unpaid' check (status in ('unpaid', 'paid', 'deferred')),
+  paid_date date,
+  receipt_id uuid references public.evidence_files(id),
+  notes text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (store_id, settlement_month, investor_id)
+);
+
 create table public.evidence_files (
   id uuid primary key default gen_random_uuid(),
   store_id uuid not null references public.stores(id),
@@ -229,6 +247,8 @@ create index investment_records_investor_idx on public.investment_records (inves
 create index monthly_closings_store_month_idx on public.monthly_closings (store_id, month);
 create index dividends_investor_idx on public.dividends (investor_id);
 create index dividends_store_month_idx on public.dividends (store_id, month);
+create index dividend_records_store_month_idx on public.dividend_records (store_id, settlement_month);
+create index dividend_records_investor_idx on public.dividend_records (investor_id);
 create index evidence_files_store_type_idx on public.evidence_files (store_id, evidence_type);
 create index audit_logs_store_created_idx on public.audit_logs (store_id, created_at desc);
 
@@ -242,6 +262,7 @@ alter table public.investors enable row level security;
 alter table public.investment_records enable row level security;
 alter table public.monthly_closings enable row level security;
 alter table public.dividends enable row level security;
+alter table public.dividend_records enable row level security;
 alter table public.evidence_files enable row level security;
 alter table public.audit_logs enable row level security;
 
@@ -271,6 +292,20 @@ as $$
   limit 1
 $$;
 
+create or replace function public.set_updated_at()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$;
+
+create trigger set_dividend_records_updated_at
+before update on public.dividend_records
+for each row execute function public.set_updated_at();
+
 grant usage on schema public to authenticated;
 grant execute on function public.current_profile_role() to authenticated;
 grant execute on function public.current_profile_store_id() to authenticated;
@@ -281,6 +316,7 @@ grant select, insert, update, delete on table public.incomes to authenticated;
 grant select, insert, update, delete on table public.expenses to authenticated;
 grant select, insert, update, delete on table public.investors to authenticated;
 grant select, insert, update, delete on table public.investment_records to authenticated;
+grant select, insert, update, delete on table public.dividend_records to authenticated;
 grant select, insert, delete on table public.evidence_files to authenticated;
 
 create policy "profile select own"
@@ -426,6 +462,36 @@ create policy "investment records admin all"
     auth.uid() is not null
     and public.current_profile_role() = 'admin'
     and public.current_profile_store_id() = store_id
+  );
+
+create policy "dividend records admin all"
+  on public.dividend_records for all
+  to authenticated
+  using (
+    auth.uid() is not null
+    and public.current_profile_role() = 'admin'
+    and public.current_profile_store_id() = store_id
+  )
+  with check (
+    auth.uid() is not null
+    and public.current_profile_role() = 'admin'
+    and public.current_profile_store_id() = store_id
+  );
+
+create policy "dividend records investor own select"
+  on public.dividend_records for select
+  to authenticated
+  using (
+    auth.uid() is not null
+    and public.current_profile_role() = 'investor'
+    and public.current_profile_store_id() = store_id
+    and exists (
+      select 1
+      from public.investors i
+      where i.id = investor_id
+        and i.user_id = auth.uid()
+        and i.store_id = store_id
+    )
   );
 
 create policy "evidence select by store role"

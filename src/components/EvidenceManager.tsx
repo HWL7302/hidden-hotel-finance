@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { MonthInput } from "@/components/DateInputs";
 import { createSignedEvidenceUrl } from "@/lib/evidence-client";
 import { createClient } from "@/lib/supabase-client";
 
@@ -194,11 +195,9 @@ export function EvidenceManager({
           <div className="flex flex-wrap gap-4">
             <label className="text-sm font-medium text-ink">
               月份
-              <input
-                type="month"
+              <MonthInput
                 value={month}
                 onChange={(event) => setMonth(event.target.value)}
-                className="mt-2 block rounded-md border border-stone-300 bg-white px-3 py-2 text-sm"
               />
             </label>
             <label className="text-sm font-medium text-ink">

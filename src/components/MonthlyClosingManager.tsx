@@ -7,6 +7,7 @@ import {
   getIncomeSourceLabel,
   incomeSourceOptions
 } from "@/lib/finance-options";
+import { MonthInput } from "@/components/DateInputs";
 import { createClient } from "@/lib/supabase-client";
 
 type IncomeRecord = {
@@ -244,11 +245,9 @@ export function MonthlyClosingManager({
         </div>
         <label className="block text-sm font-medium text-ink">
           结算月份
-          <input
-            type="month"
+          <MonthInput
             value={month}
             onChange={(event) => setMonth(event.target.value)}
-            className="mt-2 block rounded-md border border-stone-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-pine focus:ring-2 focus:ring-pine/20"
           />
         </label>
       </div>

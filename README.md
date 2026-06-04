@@ -33,6 +33,20 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key_here
 npm run dev
 ```
 
+On this Windows workspace, if Node.js is installed at `D:\应用程序\nodejs`,
+prefer:
+
+```cmd
+start-dev.cmd
+```
+
+The helper script keeps the command ASCII-safe, discovers `npm.cmd`, updates
+PATH for the current session, and then runs `npm run dev`.
+
+The dev script clears the local `.next` development cache before starting
+Next.js. This keeps Windows development sessions from reusing a corrupted Next
+dev cache.
+
 4. Open:
 
 ```text

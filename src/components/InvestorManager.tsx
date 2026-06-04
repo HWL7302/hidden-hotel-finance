@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { DateInput } from "@/components/DateInputs";
 import { createClient } from "@/lib/supabase-client";
 import {
   getInvestmentTypeLabel,
@@ -44,6 +45,11 @@ type InvestmentRecord = {
 
 type RawInvestmentRecord = Omit<InvestmentRecord, "investors"> & {
   investors?: InvestorRelation | InvestorRelation[] | null;
+};
+
+type PaidDividendRecord = {
+  investor_id: string;
+  paid_amount: string | number;
 };
 
 type InvestorFormState = {
@@ -120,6 +126,9 @@ export function InvestorManager({
   const supabase = useMemo(() => createClient(), []);
   const [investors, setInvestors] = useState<InvestorRecord[]>([]);
   const [records, setRecords] = useState<InvestmentRecord[]>([]);
+  const [paidDividendRecords, setPaidDividendRecords] = useState<
+    PaidDividendRecord[]
+  >([]);
   const [baselineAmount, setBaselineAmount] = useState<number | null>(null);
   const [baselineInput, setBaselineInput] = useState("");
   const [form, setForm] = useState<InvestorFormState>(emptyForm);
@@ -148,6 +157,16 @@ export function InvestorManager({
   const remainingAmount = effectiveBaseline - totalRegisteredAmount;
 
   const investorSummaries = useMemo(() => {
+    const paidDividendMap = new Map<string, number>();
+
+    for (const dividend of paidDividendRecords) {
+      paidDividendMap.set(
+        dividend.investor_id,
+        (paidDividendMap.get(dividend.investor_id) ?? 0) +
+          parseAmount(dividend.paid_amount)
+      );
+    }
+
     const summaryMap = new Map<
       string,
       {
@@ -183,7 +202,11 @@ export function InvestorManager({
 
       current.amount += parseAmount(record.amount);
       current.share = calculateShareRatio(current.amount, effectiveBaseline);
-      current.paybackProgress = 0;
+      current.paybackProgress =
+        current.amount > 0
+          ? ((paidDividendMap.get(record.investor_id) ?? 0) / current.amount) *
+            100
+          : 0;
       current.recordCount += 1;
       current.permissionRole = investor?.permission_role ?? "viewer";
       current.contact = investor?.email ?? investor?.contact ?? "-";
@@ -191,7 +214,7 @@ export function InvestorManager({
     }
 
     return Array.from(summaryMap.values()).sort((a, b) => b.amount - a.amount);
-  }, [effectiveBaseline, investors, records]);
+  }, [effectiveBaseline, investors, paidDividendRecords, records]);
 
   async function ensureFinanceSettings() {
     if (!defaultStoreId) {
@@ -252,14 +275,21 @@ export function InvestorManager({
         .order("investment_date", { ascending: false })
         .order("created_at", { ascending: false });
 
+      let dividendQuery = supabase
+        .from("dividend_records")
+        .select("investor_id,paid_amount")
+        .eq("status", "paid");
+
       if (defaultStoreId) {
         investorQuery = investorQuery.eq("store_id", defaultStoreId);
         recordQuery = recordQuery.eq("store_id", defaultStoreId);
+        dividendQuery = dividendQuery.eq("store_id", defaultStoreId);
       }
 
-      const [investorResult, recordResult] = await Promise.all([
+      const [investorResult, recordResult, dividendResult] = await Promise.all([
         investorQuery,
-        recordQuery
+        recordQuery,
+        dividendQuery
       ]);
 
       if (investorResult.error) {
@@ -270,7 +300,14 @@ export function InvestorManager({
         throw recordResult.error;
       }
 
+      if (dividendResult.error) {
+        throw dividendResult.error;
+      }
+
       setInvestors((investorResult.data ?? []) as InvestorRecord[]);
+      setPaidDividendRecords(
+        (dividendResult.data ?? []) as PaidDividendRecord[]
+      );
       setRecords(
         ((recordResult.data ?? []) as RawInvestmentRecord[]).map((record) => ({
           ...record,
@@ -746,14 +783,13 @@ export function InvestorManager({
               <span className="text-sm font-medium text-stone-700">
                 投资日期
               </span>
-              <input
-                type="date"
+              <DateInput
                 required
                 value={form.investmentDate}
                 onChange={(event) =>
                   updateForm("investmentDate", event.target.value)
                 }
-                className="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm outline-none focus:border-pine"
+                className="w-full rounded-md border border-stone-300 px-3 py-2 text-sm outline-none focus:border-pine"
               />
             </label>
 

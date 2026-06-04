@@ -2,6 +2,7 @@
 
 import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase-client";
+import { DateInput, MonthInput } from "@/components/DateInputs";
 import {
   createSignedEvidenceUrl,
   uploadEvidenceForRecord
@@ -38,7 +39,7 @@ type IncomeFormState = {
 };
 
 const emptyForm: IncomeFormState = {
-  date: new Date().toISOString().slice(0, 10),
+  date: todayValue(),
   source: "",
   grossAmount: "",
   feeAmount: "0.00",
@@ -46,6 +47,10 @@ const emptyForm: IncomeFormState = {
   settlementPeriod: currentMonthValue(),
   note: ""
 };
+
+function todayValue() {
+  return new Date().toISOString().slice(0, 10);
+}
 
 function currentMonthValue() {
   return new Date().toISOString().slice(0, 7);
@@ -194,7 +199,7 @@ export function IncomeManager({
     setFileInputKey((current) => current + 1);
     setForm({
       ...emptyForm,
-      date: `${month}-01`,
+      date: todayValue(),
       feeAmount: "0.00",
       netAmount: "0.00",
       settlementPeriod: month
@@ -378,11 +383,9 @@ export function IncomeManager({
         </div>
         <label className="block text-sm font-medium text-ink">
           筛选月份
-          <input
-            type="month"
+          <MonthInput
             value={month}
             onChange={(event) => setMonth(event.target.value)}
-            className="mt-2 block rounded-md border border-stone-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-pine focus:ring-2 focus:ring-pine/20"
           />
         </label>
       </div>
@@ -411,12 +414,10 @@ export function IncomeManager({
           <div className="mt-5 space-y-4">
             <label className="block text-sm font-medium text-ink">
               日期
-              <input
-                type="date"
+              <DateInput
                 required
                 value={form.date}
                 onChange={(event) => updateForm("date", event.target.value)}
-                className="mt-2 w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-pine focus:ring-2 focus:ring-pine/20"
               />
             </label>
 
@@ -480,14 +481,12 @@ export function IncomeManager({
 
             <label className="block text-sm font-medium text-ink">
               结算周期
-              <input
-                type="month"
+              <MonthInput
                 required
                 value={form.settlementPeriod}
                 onChange={(event) =>
                   updateForm("settlementPeriod", event.target.value)
                 }
-                className="mt-2 w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-pine focus:ring-2 focus:ring-pine/20"
               />
             </label>
 

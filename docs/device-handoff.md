@@ -34,6 +34,20 @@ npm run build
 npm run dev
 ```
 
+On Windows machines where Node.js is installed at `D:\应用程序\nodejs` but the
+terminal PATH is not refreshed, use the checked-in helper instead:
+
+```cmd
+start-dev.cmd
+```
+
+The helper stays ASCII-safe for CMD, discovers `npm.cmd`, updates PATH for the
+current session, and then runs the project dev script.
+
+`npm run dev` uses `scripts/dev-server.mjs`. It removes the local `.next`
+development cache before starting Next.js so Windows dev cache corruption does
+not keep causing React Client Manifest or missing chunk errors.
+
 Next.js normally uses `http://localhost:3000`. If port `3000` is already in
 use, Next.js prints the actual fallback URL, such as `http://localhost:3001`.
 Always use the URL printed by the current terminal session.
@@ -54,6 +68,10 @@ npm run typecheck
 npm run build
 npm run dev
 ```
+
+If the browser shows a stale Next.js red error screen after code changes, stop
+the dev server and run `npm run dev` again. Do not start the app with older raw
+commands unless debugging Next itself.
 
 If `git status` is not clean, review the local changes before pulling. Never use
 `git reset --hard`, force push, or overwrite the live Supabase schema to bypass

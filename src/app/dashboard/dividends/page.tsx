@@ -1,10 +1,48 @@
-import { ModulePlaceholder } from "@/components/ModulePlaceholder";
+import { DividendRecordsManager } from "@/components/DividendRecordsManager";
+import { createClient } from "@/lib/supabase-server";
 
-export default function DividendsPage() {
+export default async function DividendsPage() {
+  const supabase = await createClient();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+
+  let defaultStoreId: string | null = null;
+  let storeLoadError = "";
+
+  if (user) {
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("store_id")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (profileError) {
+      storeLoadError = profileError.message;
+    }
+
+    defaultStoreId = profile?.store_id ?? null;
+
+    if (!defaultStoreId) {
+      const { data: stores, error: storesError } = await supabase
+        .from("stores")
+        .select("id")
+        .eq("is_active", true)
+        .order("created_at", { ascending: true })
+        .limit(1);
+
+      if (storesError) {
+        storeLoadError = storesError.message;
+      }
+
+      defaultStoreId = stores?.[0]?.id ?? null;
+    }
+  }
+
   return (
-    <ModulePlaceholder
-      title="分红记录"
-      description="追踪每位投资人的应分红、已分红和支付状态，完整计算逻辑将在后续阶段实现。"
+    <DividendRecordsManager
+      defaultStoreId={defaultStoreId}
+      storeLoadError={storeLoadError}
     />
   );
 }
