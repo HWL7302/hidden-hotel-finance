@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase-client";
 import { DateInput, MonthInput } from "@/components/DateInputs";
 import { MonthToolbar } from "@/components/MonthToolbar";
+import { isMonthlyClosingPermissionError } from "@/lib/month-lock";
 import {
   createSignedEvidenceUrl,
   uploadEvidenceForRecord
@@ -186,7 +187,7 @@ export function IncomeManager({
       return;
     }
 
-    if (lockResult.error) {
+    if (lockResult.error && !isMonthlyClosingPermissionError(lockResult.error)) {
       setError(lockResult.error.message);
       return;
     }

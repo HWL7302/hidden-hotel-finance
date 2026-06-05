@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { DateInput } from "@/components/DateInputs";
 import { MonthToolbar } from "@/components/MonthToolbar";
 import { createClient } from "@/lib/supabase-client";
+import { isMonthlyClosingPermissionError } from "@/lib/month-lock";
 
 type IncomeRecord = {
   net_amount: string | number;
@@ -250,7 +251,10 @@ export function DividendRecordsManager({
       return;
     }
 
-    if (closingResult.error) {
+    if (
+      closingResult.error &&
+      !isMonthlyClosingPermissionError(closingResult.error)
+    ) {
       setError(closingResult.error.message);
       return;
     }

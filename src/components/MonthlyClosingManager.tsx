@@ -9,6 +9,7 @@ import {
 } from "@/lib/finance-options";
 import { MonthToolbar } from "@/components/MonthToolbar";
 import { createClient } from "@/lib/supabase-client";
+import { isMonthlyClosingPermissionError } from "@/lib/month-lock";
 
 type IncomeRecord = {
   source: string;
@@ -126,6 +127,8 @@ export function MonthlyClosingManager({
   const [incomes, setIncomes] = useState<IncomeRecord[]>([]);
   const [expenses, setExpenses] = useState<ExpenseRecord[]>([]);
   const [isMonthLocked, setIsMonthLocked] = useState(false);
+  const [isMonthLockPermissionMissing, setIsMonthLockPermissionMissing] =
+    useState(false);
   const [error, setError] = useState(storeLoadError);
   const [isLoading, setIsLoading] = useState(false);
   const [isLockSaving, setIsLockSaving] = useState(false);
@@ -174,14 +177,25 @@ export function MonthlyClosingManager({
       return;
     }
 
-    if (closingResult.error) {
+    if (
+      closingResult.error &&
+      !isMonthlyClosingPermissionError(closingResult.error)
+    ) {
       setError(closingResult.error.message);
       return;
     }
 
     setIncomes((incomeResult.data ?? []) as IncomeRecord[]);
     setExpenses((expenseResult.data ?? []) as ExpenseRecord[]);
-    setIsMonthLocked(Boolean((closingResult.data as MonthlyClosingRecord | null)?.is_locked));
+    setIsMonthLockPermissionMissing(
+      Boolean(
+        closingResult.error &&
+          isMonthlyClosingPermissionError(closingResult.error)
+      )
+    );
+    setIsMonthLocked(
+      Boolean((closingResult.data as MonthlyClosingRecord | null)?.is_locked)
+    );
   }
 
   useEffect(() => {
@@ -301,7 +315,11 @@ export function MonthlyClosingManager({
     setIsLockSaving(false);
 
     if (upsertError) {
-      setError(upsertError.message);
+      setError(
+        isMonthlyClosingPermissionError(upsertError)
+          ? "当前数据库还没有开放月度结算锁定权限，请先在 Supabase 执行 monthly_closings RLS SQL。"
+          : upsertError.message
+      );
       return;
     }
 
@@ -328,16 +346,27 @@ export function MonthlyClosingManager({
         <div>
           <p className="text-sm font-medium text-stone-600">状态</p>
           <p className="mt-1 text-lg font-semibold text-ink">
-            {isMonthLocked ? "🔒 已锁定" : "🔓 未锁定"}
+            {isMonthLockPermissionMissing
+              ? "锁定状态未授权"
+              : isMonthLocked
+                ? "🔒 已锁定"
+                : "🔓 未锁定"}
           </p>
+          {isMonthLockPermissionMissing ? (
+            <p className="mt-1 text-sm text-amber-700">
+              页面可正常查看。执行 monthly_closings RLS SQL 后可使用锁定功能。
+            </p>
+          ) : null}
         </div>
         <button
           type="button"
           onClick={() => void handleToggleMonthLock()}
-          disabled={isLockSaving || isLoading}
+          disabled={isLockSaving || isLoading || isMonthLockPermissionMissing}
           className="rounded-lg border border-pine/40 px-4 py-2 text-sm font-semibold text-slateblue transition hover:bg-pine/10 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {isLockSaving
+          {isMonthLockPermissionMissing
+            ? "等待授权"
+            : isLockSaving
             ? "保存中..."
             : isMonthLocked
               ? "解锁月份"

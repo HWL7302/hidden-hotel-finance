@@ -316,6 +316,7 @@ grant select, insert, update, delete on table public.incomes to authenticated;
 grant select, insert, update, delete on table public.expenses to authenticated;
 grant select, insert, update, delete on table public.investors to authenticated;
 grant select, insert, update, delete on table public.investment_records to authenticated;
+grant select, insert, update on table public.monthly_closings to authenticated;
 grant select, insert, update, delete on table public.dividend_records to authenticated;
 grant select, insert, delete on table public.evidence_files to authenticated;
 
@@ -433,6 +434,38 @@ create policy "expense delete by admin operator"
   using (
     auth.uid() is not null
     and public.current_profile_role() in ('admin', 'operator')
+    and public.current_profile_store_id() = store_id
+  );
+
+create policy "monthly closings select by store role"
+  on public.monthly_closings for select
+  to authenticated
+  using (
+    auth.uid() is not null
+    and public.current_profile_role() in ('admin', 'operator', 'investor')
+    and public.current_profile_store_id() = store_id
+  );
+
+create policy "monthly closings insert by admin"
+  on public.monthly_closings for insert
+  to authenticated
+  with check (
+    auth.uid() is not null
+    and public.current_profile_role() = 'admin'
+    and public.current_profile_store_id() = store_id
+  );
+
+create policy "monthly closings update by admin"
+  on public.monthly_closings for update
+  to authenticated
+  using (
+    auth.uid() is not null
+    and public.current_profile_role() = 'admin'
+    and public.current_profile_store_id() = store_id
+  )
+  with check (
+    auth.uid() is not null
+    and public.current_profile_role() = 'admin'
     and public.current_profile_store_id() = store_id
   );
 
