@@ -9,10 +9,18 @@ type IncomeRecord = {
   evidence_file: string | null;
 };
 
+type TrendIncomeRecord = IncomeRecord & {
+  settlement_period: string | null;
+};
+
 type ExpenseRecord = {
   amount: string | number | null;
   included_in_monthly_cost: boolean | null;
   evidence_file: string | null;
+};
+
+type TrendExpenseRecord = ExpenseRecord & {
+  date: string;
 };
 
 type InvestmentRecord = {
@@ -30,6 +38,20 @@ type DividendRecord = {
 
 function currentMonthValue() {
   return new Date().toISOString().slice(0, 7);
+}
+
+function formatMonthOption(year: number, month: number) {
+  return `${year}-${String(month).padStart(2, "0")}`;
+}
+
+function addMonths(month: string, offset: number) {
+  const [year, monthNumber] = month.split("-").map(Number);
+  const date = new Date(Date.UTC(year, monthNumber - 1 + offset, 1));
+  return formatMonthOption(date.getUTCFullYear(), date.getUTCMonth() + 1);
+}
+
+function buildTrendMonths(selectedMonth: string) {
+  return Array.from({ length: 6 }, (_, index) => addMonths(selectedMonth, index - 1));
 }
 
 function getMonthRange(month: string) {
@@ -87,6 +109,8 @@ export function HomeDashboard({
   );
   const [monthlyDividends, setMonthlyDividends] = useState<DividendRecord[]>([]);
   const [paidDividends, setPaidDividends] = useState<DividendRecord[]>([]);
+  const [trendIncomes, setTrendIncomes] = useState<TrendIncomeRecord[]>([]);
+  const [trendExpenses, setTrendExpenses] = useState<TrendExpenseRecord[]>([]);
   const [error, setError] = useState(storeLoadError);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -100,13 +124,20 @@ export function HomeDashboard({
     setIsLoading(true);
 
     const range = getMonthRange(month);
+    const trendMonths = buildTrendMonths(month);
+    const trendRange = {
+      start: `${trendMonths[0]}-01`,
+      end: getMonthRange(trendMonths[trendMonths.length - 1]).end
+    };
     const [
       incomeResult,
       expenseResult,
       investmentResult,
       financeSettingResult,
       monthlyDividendResult,
-      paidDividendResult
+      paidDividendResult,
+      trendIncomeResult,
+      trendExpenseResult
     ] = await Promise.all([
       supabase
         .from("incomes")
@@ -139,7 +170,19 @@ export function HomeDashboard({
         .from("dividend_records")
         .select("paid_amount,status")
         .eq("store_id", defaultStoreId)
-        .eq("status", "paid")
+        .eq("status", "paid"),
+      supabase
+        .from("incomes")
+        .select("net_amount,evidence_file,settlement_period")
+        .eq("store_id", defaultStoreId)
+        .gte("settlement_period", trendRange.start)
+        .lt("settlement_period", trendRange.end),
+      supabase
+        .from("expenses")
+        .select("amount,included_in_monthly_cost,evidence_file,date")
+        .eq("store_id", defaultStoreId)
+        .gte("date", trendRange.start)
+        .lt("date", trendRange.end)
     ]);
 
     setIsLoading(false);
@@ -150,7 +193,9 @@ export function HomeDashboard({
       investmentResult.error ??
       financeSettingResult.error ??
       monthlyDividendResult.error ??
-      paidDividendResult.error;
+      paidDividendResult.error ??
+      trendIncomeResult.error ??
+      trendExpenseResult.error;
 
     if (loadError) {
       setError(loadError.message);
@@ -165,6 +210,8 @@ export function HomeDashboard({
       (monthlyDividendResult.data ?? []) as DividendRecord[]
     );
     setPaidDividends((paidDividendResult.data ?? []) as DividendRecord[]);
+    setTrendIncomes((trendIncomeResult.data ?? []) as TrendIncomeRecord[]);
+    setTrendExpenses((trendExpenseResult.data ?? []) as TrendExpenseRecord[]);
   }
 
   useEffect(() => {
@@ -258,6 +305,50 @@ export function HomeDashboard({
     }
   ];
 
+  const trendData = useMemo(() => {
+    const months = buildTrendMonths(month);
+    const data = months.map((item) => ({
+      month: item,
+      income: BigInt(0),
+      expense: BigInt(0),
+      netProfit: BigInt(0)
+    }));
+    const byMonth = new Map(data.map((item) => [item.month, item]));
+
+    for (const income of trendIncomes) {
+      const item = income.settlement_period
+        ? byMonth.get(income.settlement_period.slice(0, 7))
+        : null;
+
+      if (item) {
+        item.income += amountToCents(income.net_amount);
+      }
+    }
+
+    for (const expense of trendExpenses) {
+      if (!expense.included_in_monthly_cost) {
+        continue;
+      }
+
+      const item = byMonth.get(expense.date.slice(0, 7));
+
+      if (item) {
+        item.expense += amountToCents(expense.amount);
+      }
+    }
+
+    for (const item of data) {
+      item.netProfit = item.income - item.expense;
+    }
+
+    const maxAmount = data.reduce((max, item) => {
+      const monthMax = item.income > item.expense ? item.income : item.expense;
+      return monthMax > max ? monthMax : max;
+    }, BigInt(0));
+
+    return { data, maxAmount };
+  }, [month, trendExpenses, trendIncomes]);
+
   const reminders = [
     `本月收入记录数：${summary.incomeCount}`,
     `本月支出记录数：${summary.expenseCount}`,
@@ -276,12 +367,12 @@ export function HomeDashboard({
     <section>
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-ink">首页</h2>
+          <h2 className="text-2xl font-bold text-ink">Hidden Hotel 财务管理</h2>
           <p className="mt-3 max-w-3xl text-sm leading-6 text-stone-600">
             汇总当前月份经营结果、投资登记、分红发放和经营提醒，用于快速查看项目经营状态。
           </p>
         </div>
-        <label className="block text-sm font-medium text-ink">
+        <label className="block min-w-40 text-sm font-medium text-ink lg:mr-[42%]">
           选择月份
           <MonthInput
             value={month}
@@ -314,6 +405,66 @@ export function HomeDashboard({
             </p>
           </div>
         ))}
+      </div>
+
+      <div className="mt-6 rounded-xl border border-slate-200 bg-white p-5 shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h3 className="text-lg font-semibold text-ink">月收入支出趋势</h3>
+            <p className="mt-1 text-sm text-slate-500">
+              展示当前选择月份附近 6 个月的收入、支出和净利润。
+            </p>
+          </div>
+          <div className="flex items-center gap-4 text-xs text-slate-500">
+            <span className="flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 rounded-sm bg-pine" />
+              收入
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 rounded-sm bg-slateblue" />
+              支出
+            </span>
+          </div>
+        </div>
+        <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-6">
+          {trendData.data.map((item) => {
+            const incomeHeight =
+              trendData.maxAmount > BigInt(0)
+                ? Math.max(8, Math.round((Number(item.income) / Number(trendData.maxAmount)) * 100))
+                : 0;
+            const expenseHeight =
+              trendData.maxAmount > BigInt(0)
+                ? Math.max(8, Math.round((Number(item.expense) / Number(trendData.maxAmount)) * 100))
+                : 0;
+
+            return (
+              <div key={item.month} className="rounded-lg bg-slate-50 px-3 py-3">
+                <div className="flex h-36 items-end justify-center gap-3">
+                  <div className="flex h-full w-7 items-end rounded-full bg-white">
+                    <div
+                      className="w-full rounded-full bg-pine"
+                      style={{ height: `${incomeHeight}%` }}
+                    />
+                  </div>
+                  <div className="flex h-full w-7 items-end rounded-full bg-white">
+                    <div
+                      className="w-full rounded-full bg-slateblue"
+                      style={{ height: `${expenseHeight}%` }}
+                    />
+                  </div>
+                </div>
+                <p className="mt-3 text-center text-sm font-semibold text-ink">
+                  {item.month}
+                </p>
+                <div className="mt-2 space-y-1 text-xs text-slate-500">
+                  <p>收入：{formatMoney(item.income, false)}</p>
+                  <p>支出：{formatMoney(item.expense, false)}</p>
+                  <p>净利润：{formatMoney(item.netProfit, false)}</p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">

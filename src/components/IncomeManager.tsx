@@ -381,7 +381,7 @@ export function IncomeManager({
             记录电竞酒店经营收入。Phase 2A 使用 Supabase `incomes` 表实现列表、新增、编辑、删除和按月查看。
           </p>
         </div>
-        <label className="block text-sm font-medium text-ink">
+        <label className="block min-w-40 text-sm font-medium text-ink lg:mr-[42%]">
           选择月份
           <MonthInput
             value={month}

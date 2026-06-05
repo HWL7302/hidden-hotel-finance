@@ -168,7 +168,7 @@ export function MonthInput(props: MonthSelectProps) {
   }
 
   return (
-    <div ref={wrapperRef} className="relative mt-2">
+    <div ref={wrapperRef} className="relative mt-2 min-w-40">
       <select
         className="sr-only"
         disabled={disabled}
@@ -186,7 +186,7 @@ export function MonthInput(props: MonthSelectProps) {
         type="button"
         disabled={disabled}
         onClick={() => setIsOpen((current) => !current)}
-        className={className ?? `block text-left ${defaultClassName}`}
+        className={className ?? `block whitespace-nowrap text-left ${defaultClassName}`}
       >
         {selectedValue}
       </button>

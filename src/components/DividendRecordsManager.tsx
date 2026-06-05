@@ -449,7 +449,7 @@ export function DividendRecordsManager({
             根据月度结算净利润和投资人持股比例，记录每月应分红金额、实发金额和发放状态。
           </p>
         </div>
-        <label className="block text-sm font-medium text-ink">
+        <label className="block min-w-40 text-sm font-medium text-ink lg:mr-[42%]">
           选择月份
           <MonthInput
             value={month}

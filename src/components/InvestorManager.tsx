@@ -622,11 +622,42 @@ export function InvestorManager({
 
   return (
     <section>
-      <div>
-        <h2 className="text-2xl font-bold text-ink">投资人管理</h2>
-        <p className="mt-3 max-w-3xl text-sm leading-6 text-stone-600">
-          记录投资人、投资金额、投资类型和持股比例，用于后续分红、回本进度和权限查看。
-        </p>
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+        <div>
+          <h2 className="text-2xl font-bold text-ink">投资人管理</h2>
+          <p className="mt-3 max-w-3xl text-sm leading-6 text-stone-600">
+            记录投资人、投资金额、投资类型和持股比例，用于后续分红、回本进度和权限查看。
+          </p>
+        </div>
+        <form
+          onSubmit={handleBaselineSubmit}
+          className="w-full rounded-xl border border-slate-200 bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.04)] xl:max-w-md"
+        >
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+            <label className="block flex-1">
+              <span className="text-sm font-medium text-stone-700">
+                修改项目总投资基准
+              </span>
+              <input
+                value={baselineInput}
+                onChange={(event) => setBaselineInput(event.target.value)}
+                inputMode="decimal"
+                className="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm outline-none focus:border-pine"
+                placeholder="例如 420000"
+              />
+            </label>
+            <button
+              type="submit"
+              disabled={isSavingBaseline}
+              className="rounded-md bg-pine px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isSavingBaseline ? "保存中..." : "保存"}
+            </button>
+          </div>
+          <p className="mt-2 text-xs text-stone-500">
+            持股比例 = 投资金额 / 项目总投资基准 x 100
+          </p>
+        </form>
       </div>
 
       <div className="mt-6 grid gap-4 md:grid-cols-4">
@@ -648,34 +679,6 @@ export function InvestorManager({
           tone={remainingAmount < 0 ? "warning" : "default"}
         />
       </div>
-
-      <form
-        onSubmit={handleBaselineSubmit}
-        className="mt-4 flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.04)] md:flex-row md:items-end"
-      >
-        <label className="block md:w-72">
-          <span className="text-sm font-medium text-stone-700">
-            修改项目总投资基准
-          </span>
-          <input
-            value={baselineInput}
-            onChange={(event) => setBaselineInput(event.target.value)}
-            inputMode="decimal"
-            className="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm outline-none focus:border-pine"
-            placeholder="例如 420000"
-          />
-        </label>
-        <button
-          type="submit"
-          disabled={isSavingBaseline}
-          className="rounded-md bg-pine px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {isSavingBaseline ? "保存中..." : "保存基准金额"}
-        </button>
-        <p className="text-sm text-stone-500">
-          持股比例 = 投资金额 / 项目总投资基准 x 100
-        </p>
-      </form>
 
       {remainingAmount < 0 ? (
         <p className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
