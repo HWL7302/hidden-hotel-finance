@@ -3,7 +3,8 @@
 import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase-client";
-import { DateInput, MonthInput } from "@/components/DateInputs";
+import { DateInput } from "@/components/DateInputs";
+import { MonthToolbar } from "@/components/MonthToolbar";
 import {
   createSignedEvidenceUrl,
   uploadEvidenceForRecord
@@ -366,13 +367,7 @@ export function ExpenseManager({
             记录运营支出、成本和费用。Phase 2B 使用 Supabase `expenses` 表实现列表、新增、编辑、删除和按月查看。
           </p>
         </div>
-        <label className="block min-w-40 text-sm font-medium text-ink lg:mr-[42%]">
-          选择月份
-          <MonthInput
-            value={month}
-            onChange={(event) => setMonth(event.target.value)}
-          />
-        </label>
+        <MonthToolbar month={month} onMonthChange={setMonth} />
       </div>
 
       {error ? (

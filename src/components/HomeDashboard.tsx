@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { MonthInput } from "@/components/DateInputs";
+import { MonthToolbar } from "@/components/MonthToolbar";
 import { createClient } from "@/lib/supabase-client";
 
 type IncomeRecord = {
@@ -372,13 +372,7 @@ export function HomeDashboard({
             汇总当前月份经营结果、投资登记、分红发放和经营提醒，用于快速查看项目经营状态。
           </p>
         </div>
-        <label className="block min-w-40 text-sm font-medium text-ink lg:mr-[42%]">
-          选择月份
-          <MonthInput
-            value={month}
-            onChange={(event) => setMonth(event.target.value)}
-          />
-        </label>
+        <MonthToolbar month={month} onMonthChange={setMonth} />
       </div>
 
       {error ? (

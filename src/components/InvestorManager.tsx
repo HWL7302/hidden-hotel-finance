@@ -137,6 +137,7 @@ export function InvestorManager({
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isSavingBaseline, setIsSavingBaseline] = useState(false);
+  const [isBaselineModalOpen, setIsBaselineModalOpen] = useState(false);
   const [error, setError] = useState(storeLoadError);
   const [notice, setNotice] = useState("");
 
@@ -496,6 +497,7 @@ export function InvestorManager({
 
       await updateAllShareRatios(nextBaseline);
       setBaselineAmount(nextBaseline);
+      setIsBaselineModalOpen(false);
       setNotice("项目总投资基准已更新，持股比例已按新基准重新计算。");
       await loadInvestors();
     } catch (saveError) {
@@ -622,48 +624,29 @@ export function InvestorManager({
 
   return (
     <section>
-      <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-ink">投资人管理</h2>
-          <p className="mt-3 max-w-3xl text-sm leading-6 text-stone-600">
-            记录投资人、投资金额、投资类型和持股比例，用于后续分红、回本进度和权限查看。
-          </p>
-        </div>
-        <form
-          onSubmit={handleBaselineSubmit}
-          className="w-full rounded-xl border border-slate-200 bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.04)] xl:max-w-md"
-        >
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-            <label className="block flex-1">
-              <span className="text-sm font-medium text-stone-700">
-                修改项目总投资基准
-              </span>
-              <input
-                value={baselineInput}
-                onChange={(event) => setBaselineInput(event.target.value)}
-                inputMode="decimal"
-                className="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm outline-none focus:border-pine"
-                placeholder="例如 420000"
-              />
-            </label>
-            <button
-              type="submit"
-              disabled={isSavingBaseline}
-              className="rounded-md bg-pine px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {isSavingBaseline ? "保存中..." : "保存"}
-            </button>
-          </div>
-          <p className="mt-2 text-xs text-stone-500">
-            持股比例 = 投资金额 / 项目总投资基准 x 100
-          </p>
-        </form>
+      <div>
+        <h2 className="text-2xl font-bold text-ink">投资人管理</h2>
+        <p className="mt-3 max-w-3xl text-sm leading-6 text-stone-600">
+          记录投资人、投资金额、投资类型和持股比例，用于后续分红、回本进度和权限查看。
+        </p>
       </div>
 
       <div className="mt-6 grid gap-4 md:grid-cols-4">
         <SummaryCard
           title="项目总投资基准"
           value={baselineAmount === null ? "未设置" : formatMoney(baselineAmount)}
+          action={
+            <button
+              type="button"
+              onClick={() => {
+                setBaselineInput(String(Math.round(effectiveBaseline || 420000)));
+                setIsBaselineModalOpen(true);
+              }}
+              className="rounded-md border border-pine/30 px-3 py-1.5 text-xs font-semibold text-slateblue transition hover:bg-pine/10"
+            >
+              修改
+            </button>
+          }
         />
         <SummaryCard
           title="当前登记投资额"
@@ -696,6 +679,48 @@ export function InvestorManager({
         <p className="mt-4 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
           {notice}
         </p>
+      ) : null}
+
+      {isBaselineModalOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slateblue/30 px-4">
+          <form
+            onSubmit={handleBaselineSubmit}
+            className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-xl"
+          >
+            <h3 className="text-lg font-semibold text-ink">
+              修改项目总投资基准
+            </h3>
+            <p className="mt-4 text-sm text-stone-600">
+              当前金额：{baselineAmount === null ? "未设置" : formatMoney(baselineAmount)}
+            </p>
+            <label className="mt-4 block">
+              <span className="text-sm font-medium text-stone-700">新金额：</span>
+              <input
+                value={baselineInput}
+                onChange={(event) => setBaselineInput(event.target.value)}
+                inputMode="decimal"
+                className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-pine focus:ring-2 focus:ring-pine/20"
+                placeholder="例如 420000"
+              />
+            </label>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setIsBaselineModalOpen(false)}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-ink transition hover:border-pine hover:text-pine"
+              >
+                取消
+              </button>
+              <button
+                type="submit"
+                disabled={isSavingBaseline}
+                className="rounded-lg bg-pine px-4 py-2 text-sm font-semibold text-white transition hover:bg-slateblue disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isSavingBaseline ? "保存中..." : "确认"}
+              </button>
+            </div>
+          </form>
+        </div>
       ) : null}
 
       <div className="mt-6 grid gap-6 xl:grid-cols-[420px_1fr]">
@@ -966,10 +991,12 @@ export function InvestorManager({
 function SummaryCard({
   title,
   value,
+  action,
   tone = "default"
 }: {
   title: string;
   value: string;
+  action?: React.ReactNode;
   tone?: "default" | "warning";
 }) {
   return (
@@ -978,7 +1005,10 @@ function SummaryCard({
         tone === "warning" ? "border-amber-300" : "border-stone-200"
       }`}
     >
-      <p className="text-sm text-stone-500">{title}</p>
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-sm text-stone-500">{title}</p>
+        {action}
+      </div>
       <p className="mt-2 text-xl font-bold text-ink">{value}</p>
     </div>
   );

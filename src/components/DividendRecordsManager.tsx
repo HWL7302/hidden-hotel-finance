@@ -1,7 +1,8 @@
 ﻿"use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { DateInput, MonthInput } from "@/components/DateInputs";
+import { DateInput } from "@/components/DateInputs";
+import { MonthToolbar } from "@/components/MonthToolbar";
 import { createClient } from "@/lib/supabase-client";
 
 type IncomeRecord = {
@@ -449,23 +450,20 @@ export function DividendRecordsManager({
             根据月度结算净利润和投资人持股比例，记录每月应分红金额、实发金额和发放状态。
           </p>
         </div>
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end lg:mr-[30%]">
-          <label className="block min-w-40 text-sm font-medium text-ink">
-            选择月份
-            <MonthInput
-              value={month}
-              onChange={(event) => setMonth(event.target.value)}
-            />
-          </label>
-          <button
-            type="button"
-            onClick={() => void handleGenerate()}
-            disabled={isGenerating || isLoading}
-            className="rounded-lg bg-pine px-4 py-2 text-sm font-semibold text-white transition hover:bg-slateblue disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {isGenerating ? "生成中..." : "生成本月分红记录"}
-          </button>
-        </div>
+        <MonthToolbar
+          month={month}
+          onMonthChange={setMonth}
+          action={
+            <button
+              type="button"
+              onClick={() => void handleGenerate()}
+              disabled={isGenerating || isLoading}
+              className="rounded-lg bg-pine px-4 py-2 text-sm font-semibold text-white transition hover:bg-slateblue disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isGenerating ? "生成中..." : "生成本月分红记录"}
+            </button>
+          }
+        />
       </div>
 
       {error ? (

@@ -7,7 +7,7 @@ import {
   getIncomeSourceLabel,
   incomeSourceOptions
 } from "@/lib/finance-options";
-import { MonthInput } from "@/components/DateInputs";
+import { MonthToolbar } from "@/components/MonthToolbar";
 import { createClient } from "@/lib/supabase-client";
 
 type IncomeRecord = {
@@ -243,13 +243,7 @@ export function MonthlyClosingManager({
             按月份汇总收入、支出和净利润，用于后续分红和经营分析。
           </p>
         </div>
-        <label className="block min-w-40 text-sm font-medium text-ink lg:mr-[42%]">
-          选择月份
-          <MonthInput
-            value={month}
-            onChange={(event) => setMonth(event.target.value)}
-          />
-        </label>
+        <MonthToolbar month={month} onMonthChange={setMonth} />
       </div>
 
       {error ? (
