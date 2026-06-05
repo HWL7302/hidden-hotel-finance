@@ -626,9 +626,6 @@ export function InvestorManager({
     <section>
       <div>
         <h2 className="text-2xl font-bold text-ink">投资人管理</h2>
-        <p className="mt-3 max-w-3xl text-sm leading-6 text-stone-600">
-          记录投资人、投资金额、投资类型和持股比例，用于后续分红、回本进度和权限查看。
-        </p>
       </div>
 
       <div className="mt-6 grid gap-4 md:grid-cols-4">

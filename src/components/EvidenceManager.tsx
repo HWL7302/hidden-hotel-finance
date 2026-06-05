@@ -175,9 +175,6 @@ export function EvidenceManager({
     <section>
       <div>
         <h2 className="text-2xl font-bold text-ink">凭证档案</h2>
-        <p className="mt-3 max-w-3xl text-sm leading-6 text-stone-600">
-          统一查看收入和支出录入时上传的凭证。文件保存在 Supabase Storage，后续将在此提供批量下载能力。
-        </p>
       </div>
 
       {error ? (
@@ -195,8 +192,8 @@ export function EvidenceManager({
       <div className="mt-6 rounded-xl border border-slate-200 bg-white shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
         <div className="flex flex-wrap items-end justify-between gap-4 border-b border-stone-200 px-5 py-4">
           <div className="flex flex-wrap gap-4">
-            <label className="text-sm font-medium text-ink">
-              选择月份
+            <label className="flex items-center gap-3 text-sm font-medium text-ink">
+              <span className="whitespace-nowrap">显示月份：</span>
               <MonthInput
                 value={month}
                 onChange={(event) => setMonth(event.target.value)}

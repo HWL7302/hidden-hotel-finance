@@ -41,6 +41,10 @@ type ExpenseSummary = {
   evidenceCount: number;
 };
 
+type MonthlyClosingRecord = {
+  is_locked: boolean | null;
+};
+
 function currentMonthValue() {
   return new Date().toISOString().slice(0, 7);
 }
@@ -65,6 +69,14 @@ function amountToCents(value: string | number | null) {
 }
 
 function formatMoney(value: bigint) {
+  const isNegative = value < BigInt(0);
+  const absoluteValue = isNegative ? -value : value;
+  const integerPart = absoluteValue / BigInt(100);
+  const decimalPart = String(absoluteValue % BigInt(100)).padStart(2, "0");
+  return `${isNegative ? "-" : ""}${integerPart}.${decimalPart}`;
+}
+
+function centsToNumericString(value: bigint) {
   const isNegative = value < BigInt(0);
   const absoluteValue = isNegative ? -value : value;
   const integerPart = absoluteValue / BigInt(100);
@@ -113,8 +125,10 @@ export function MonthlyClosingManager({
   const [month, setMonth] = useState(currentMonthValue);
   const [incomes, setIncomes] = useState<IncomeRecord[]>([]);
   const [expenses, setExpenses] = useState<ExpenseRecord[]>([]);
+  const [isMonthLocked, setIsMonthLocked] = useState(false);
   const [error, setError] = useState(storeLoadError);
   const [isLoading, setIsLoading] = useState(false);
+  const [isLockSaving, setIsLockSaving] = useState(false);
 
   async function loadMonthlySummary() {
     if (!defaultStoreId) {
@@ -128,7 +142,7 @@ export function MonthlyClosingManager({
     setError("");
     setIsLoading(true);
     const range = getMonthRange(month);
-    const [incomeResult, expenseResult] = await Promise.all([
+    const [incomeResult, expenseResult, closingResult] = await Promise.all([
       supabase
         .from("incomes")
         .select("source,gross_amount,fee_amount,net_amount,evidence_file")
@@ -140,7 +154,13 @@ export function MonthlyClosingManager({
         .select("category,amount,included_in_monthly_cost,evidence_file")
         .eq("store_id", defaultStoreId)
         .gte("date", range.start)
-        .lt("date", range.end)
+        .lt("date", range.end),
+      supabase
+        .from("monthly_closings")
+        .select("is_locked")
+        .eq("store_id", defaultStoreId)
+        .eq("month", range.start)
+        .maybeSingle()
     ]);
     setIsLoading(false);
 
@@ -154,8 +174,14 @@ export function MonthlyClosingManager({
       return;
     }
 
+    if (closingResult.error) {
+      setError(closingResult.error.message);
+      return;
+    }
+
     setIncomes((incomeResult.data ?? []) as IncomeRecord[]);
     setExpenses((expenseResult.data ?? []) as ExpenseRecord[]);
+    setIsMonthLocked(Boolean((closingResult.data as MonthlyClosingRecord | null)?.is_locked));
   }
 
   useEffect(() => {
@@ -234,14 +260,60 @@ export function MonthlyClosingManager({
     }
   ];
 
+  async function handleToggleMonthLock() {
+    if (!defaultStoreId) {
+      setError("无法修改月份锁定状态：当前用户没有绑定 store_id。");
+      return;
+    }
+
+    const nextLocked = !isMonthLocked;
+
+    if (nextLocked) {
+      const confirmed = window.confirm(
+        `确认锁定 ${month} 吗？\n\n锁定后：\n收入记录不能修改\n支出记录不能修改\n不能重新生成当月分红记录`
+      );
+
+      if (!confirmed) {
+        return;
+      }
+    }
+
+    setError("");
+    setIsLockSaving(true);
+
+    const { error: upsertError } = await supabase
+      .from("monthly_closings")
+      .upsert(
+        {
+          store_id: defaultStoreId,
+          month: `${month}-01`,
+          total_income: centsToNumericString(summary.totalIncome),
+          total_expense: centsToNumericString(summary.totalExpense),
+          net_profit: centsToNumericString(summary.netProfit),
+          distributable_profit: centsToNumericString(
+            summary.netProfit > BigInt(0) ? summary.netProfit : BigInt(0)
+          ),
+          is_locked: nextLocked
+        },
+        { onConflict: "store_id,month" }
+      );
+
+    setIsLockSaving(false);
+
+    if (upsertError) {
+      setError(upsertError.message);
+      return;
+    }
+
+    setIsMonthLocked(nextLocked);
+    await loadMonthlySummary();
+  }
+
   return (
     <section>
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <h2 className="text-2xl font-bold text-ink">月度结算</h2>
-          <p className="mt-3 max-w-3xl text-sm leading-6 text-stone-600">
-            按月份汇总收入、支出和净利润，用于后续分红和经营分析。
-          </p>
         </div>
         <MonthToolbar month={month} onMonthChange={setMonth} />
       </div>
@@ -251,6 +323,27 @@ export function MonthlyClosingManager({
           {error}
         </p>
       ) : null}
+
+      <div className="mt-6 flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-5 shadow-[0_8px_24px_rgba(15,23,42,0.04)] sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-sm font-medium text-stone-600">状态</p>
+          <p className="mt-1 text-lg font-semibold text-ink">
+            {isMonthLocked ? "🔒 已锁定" : "🔓 未锁定"}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => void handleToggleMonthLock()}
+          disabled={isLockSaving || isLoading}
+          className="rounded-lg border border-pine/40 px-4 py-2 text-sm font-semibold text-slateblue transition hover:bg-pine/10 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {isLockSaving
+            ? "保存中..."
+            : isMonthLocked
+              ? "解锁月份"
+              : "锁定月份"}
+        </button>
+      </div>
 
       <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {cards.map((card) => (
@@ -298,7 +391,7 @@ export function MonthlyClosingManager({
       <div className="mt-6 rounded-xl border border-slate-200 bg-white p-5 shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
         <h3 className="text-lg font-semibold text-ink">后续功能预留</h3>
         <p className="mt-3 text-sm leading-6 text-stone-600">
-          当前为月度结算第一版。后续将增加月份锁定和导出月报。
+          后续将增加导出月报。
         </p>
       </div>
     </section>

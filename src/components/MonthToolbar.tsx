@@ -12,14 +12,14 @@ export function MonthToolbar({
 }) {
   return (
     <div className="flex w-full justify-start lg:w-[calc(50%-0.5rem)] lg:justify-end">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-        <label className="block min-w-40 text-sm font-medium text-ink">
-          选择月份
-          <MonthInput
-            value={month}
-            onChange={(event) => onMonthChange(event.target.value)}
-          />
-        </label>
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="whitespace-nowrap text-sm font-medium text-ink">
+          显示月份：
+        </span>
+        <MonthInput
+          value={month}
+          onChange={(event) => onMonthChange(event.target.value)}
+        />
         {action}
       </div>
     </div>

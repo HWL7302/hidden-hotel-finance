@@ -120,6 +120,7 @@ export function ExpenseManager({
   const [notice, setNotice] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isMonthLocked, setIsMonthLocked] = useState(false);
   const [evidenceFile, setEvidenceFile] = useState<File | null>(null);
   const [fileInputKey, setFileInputKey] = useState(0);
   const [isPayeeManuallyEdited, setIsPayeeManuallyEdited] = useState(false);
@@ -144,15 +145,33 @@ export function ExpenseManager({
       query = query.eq("store_id", defaultStoreId);
     }
 
-    const { data, error: loadError } = await query;
+    const lockQuery = defaultStoreId
+      ? supabase
+          .from("monthly_closings")
+          .select("is_locked")
+          .eq("store_id", defaultStoreId)
+          .eq("month", range.start)
+          .maybeSingle()
+      : null;
+
+    const [expenseResult, lockResult] = await Promise.all([
+      query,
+      lockQuery ?? Promise.resolve({ data: null, error: null })
+    ]);
     setIsLoading(false);
 
-    if (loadError) {
-      setError(loadError.message);
+    if (expenseResult.error) {
+      setError(expenseResult.error.message);
       return;
     }
 
-    setExpenses((data ?? []) as ExpenseRecord[]);
+    if (lockResult.error) {
+      setError(lockResult.error.message);
+      return;
+    }
+
+    setIsMonthLocked(Boolean(lockResult.data?.is_locked));
+    setExpenses((expenseResult.data ?? []) as ExpenseRecord[]);
   }
 
   useEffect(() => {
@@ -207,6 +226,11 @@ export function ExpenseManager({
   }
 
   function startEdit(expense: ExpenseRecord) {
+    if (isMonthLocked) {
+      setError("当前月份已锁定，不能编辑支出记录。");
+      return;
+    }
+
     setEditingId(expense.id);
     setIsPayeeManuallyEdited(Boolean(expense.payee));
     setForm({
@@ -249,6 +273,11 @@ export function ExpenseManager({
 
     if (!currentUserId) {
       setError("无法保存支出：当前登录用户信息为空。");
+      return;
+    }
+
+    if (isMonthLocked) {
+      setError("当前月份已锁定，不能新增或修改支出记录。");
       return;
     }
 
@@ -324,6 +353,11 @@ export function ExpenseManager({
   }
 
   async function handleDelete(expense: ExpenseRecord) {
+    if (isMonthLocked) {
+      setError("当前月份已锁定，不能删除支出记录。");
+      return;
+    }
+
     const confirmed = window.confirm(
       `确认删除 ${expense.date} 的支出记录「${getExpenseCategoryLabel(expense.category)}」吗？`
     );
@@ -363,9 +397,6 @@ export function ExpenseManager({
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <h2 className="text-2xl font-bold text-ink">支出管理</h2>
-          <p className="mt-3 max-w-3xl text-sm leading-6 text-stone-600">
-            记录运营支出、成本和费用。Phase 2B 使用 Supabase `expenses` 表实现列表、新增、编辑、删除和按月查看。
-          </p>
         </div>
         <MonthToolbar month={month} onMonthChange={setMonth} />
       </div>
@@ -379,6 +410,12 @@ export function ExpenseManager({
       {notice ? (
         <p className="mt-5 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
           {notice}
+        </p>
+      ) : null}
+
+      {isMonthLocked ? (
+        <p className="mt-5 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          当前月份已锁定，支出记录只能查看，不能新增、编辑或删除。
         </p>
       ) : null}
 
@@ -397,6 +434,7 @@ export function ExpenseManager({
               <DateInput
                 required
                 value={form.date}
+                disabled={isMonthLocked}
                 onChange={(event) => updateForm("date", event.target.value)}
               />
             </label>
@@ -406,6 +444,7 @@ export function ExpenseManager({
               <select
                 required
                 value={form.category}
+                disabled={isMonthLocked}
                 onChange={(event) => handleCategoryChange(event.target.value)}
                 className="mt-2 w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-pine focus:ring-2 focus:ring-pine/20"
               >
@@ -425,6 +464,7 @@ export function ExpenseManager({
                 required
                 inputMode="decimal"
                 value={form.amount}
+                disabled={isMonthLocked}
                 onChange={(event) => updateForm("amount", event.target.value)}
                 placeholder="0.00"
                 className="mt-2 w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-pine focus:ring-2 focus:ring-pine/20"
@@ -436,6 +476,7 @@ export function ExpenseManager({
               <input
                 type="text"
                 value={form.payee}
+                disabled={isMonthLocked}
                 onChange={(event) => handlePayeeChange(event.target.value)}
                 placeholder="例如：物业、供应商"
                 className="mt-2 w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-pine focus:ring-2 focus:ring-pine/20"
@@ -446,6 +487,7 @@ export function ExpenseManager({
               支付方式
               <select
                 value={form.paymentMethod}
+                disabled={isMonthLocked}
                 onChange={(event) =>
                   updateForm("paymentMethod", event.target.value)
                 }
@@ -464,6 +506,7 @@ export function ExpenseManager({
               <input
                 type="checkbox"
                 checked={form.includedInMonthlyCost}
+                disabled={isMonthLocked}
                 onChange={(event) =>
                   updateForm("includedInMonthlyCost", event.target.checked)
                 }
@@ -478,6 +521,7 @@ export function ExpenseManager({
                 key={fileInputKey}
                 type="file"
                 accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf"
+                disabled={isMonthLocked}
                 onChange={handleEvidenceFileChange}
                 className="mt-2 block w-full cursor-pointer rounded-lg border border-slate-300 bg-white text-sm text-stone-700 file:mr-4 file:cursor-pointer file:border-0 file:bg-pine/10 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-slateblue hover:file:bg-pine/20"
               />
@@ -490,6 +534,7 @@ export function ExpenseManager({
               备注
               <textarea
                 value={form.note}
+                disabled={isMonthLocked}
                 onChange={(event) => updateForm("note", event.target.value)}
                 rows={3}
                 placeholder="补充支出说明"
@@ -501,10 +546,16 @@ export function ExpenseManager({
           <div className="mt-5 flex gap-3">
             <button
               type="submit"
-              disabled={isSaving}
+              disabled={isSaving || isMonthLocked}
               className="rounded-md bg-pine px-4 py-2 text-sm font-semibold text-white transition hover:bg-slateblue disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {isSaving ? "保存中..." : editingId ? "保存修改" : "新增支出"}
+              {isMonthLocked
+                ? "月份已锁定"
+                : isSaving
+                  ? "保存中..."
+                  : editingId
+                    ? "保存修改"
+                    : "新增支出"}
             </button>
             {editingId ? (
               <button
@@ -621,6 +672,7 @@ export function ExpenseManager({
                           <button
                             type="button"
                             onClick={() => startEdit(expense)}
+                            disabled={isMonthLocked}
                             className="rounded-md border border-stone-300 px-3 py-1.5 text-xs font-medium text-ink transition hover:border-pine hover:text-pine"
                           >
                             编辑
@@ -628,6 +680,7 @@ export function ExpenseManager({
                           <button
                             type="button"
                             onClick={() => void handleDelete(expense)}
+                            disabled={isMonthLocked}
                             className="rounded-md border border-red-200 px-3 py-1.5 text-xs font-medium text-red-700 transition hover:bg-red-50"
                           >
                             删除

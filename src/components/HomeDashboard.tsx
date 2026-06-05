@@ -368,9 +368,6 @@ export function HomeDashboard({
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <h2 className="text-2xl font-bold text-ink">Hidden Hotel 财务管理</h2>
-          <p className="mt-3 max-w-3xl text-sm leading-6 text-stone-600">
-            汇总当前月份经营结果、投资登记、分红发放和经营提醒，用于快速查看项目经营状态。
-          </p>
         </div>
         <MonthToolbar month={month} onMonthChange={setMonth} />
       </div>
@@ -406,7 +403,7 @@ export function HomeDashboard({
           <div>
             <h3 className="text-lg font-semibold text-ink">月收入支出趋势</h3>
             <p className="mt-1 text-sm text-slate-500">
-              展示当前选择月份附近 6 个月的收入、支出和净利润。
+              展示当前显示月份附近 6 个月的收入、支出和净利润。
             </p>
           </div>
           <div className="flex items-center gap-4 text-xs text-slate-500">

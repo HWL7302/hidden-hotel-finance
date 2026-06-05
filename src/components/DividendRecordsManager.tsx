@@ -38,6 +38,10 @@ type DividendRecord = {
   created_at: string;
 };
 
+type MonthlyClosingRecord = {
+  is_locked: boolean | null;
+};
+
 type DividendStatus = "unpaid" | "paid" | "deferred";
 
 type EditFormState = {
@@ -123,6 +127,7 @@ export function DividendRecordsManager({
   const [isLoading, setIsLoading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isMonthLocked, setIsMonthLocked] = useState(false);
   const [error, setError] = useState(storeLoadError);
   const [notice, setNotice] = useState("");
 
@@ -181,7 +186,13 @@ export function DividendRecordsManager({
     setIsLoading(true);
 
     const range = getMonthRange(month);
-    const [incomeResult, expenseResult, investorResult, dividendResult] =
+    const [
+      incomeResult,
+      expenseResult,
+      investorResult,
+      dividendResult,
+      closingResult
+    ] =
       await Promise.all([
         supabase
           .from("incomes")
@@ -208,7 +219,13 @@ export function DividendRecordsManager({
           )
           .eq("store_id", defaultStoreId)
           .eq("settlement_month", selectedMonthStart)
-          .order("created_at", { ascending: true })
+          .order("created_at", { ascending: true }),
+        supabase
+          .from("monthly_closings")
+          .select("is_locked")
+          .eq("store_id", defaultStoreId)
+          .eq("month", selectedMonthStart)
+          .maybeSingle()
       ]);
 
     setIsLoading(false);
@@ -233,10 +250,16 @@ export function DividendRecordsManager({
       return;
     }
 
+    if (closingResult.error) {
+      setError(closingResult.error.message);
+      return;
+    }
+
     setIncomes((incomeResult.data ?? []) as IncomeRecord[]);
     setExpenses((expenseResult.data ?? []) as ExpenseRecord[]);
     setInvestors((investorResult.data ?? []) as InvestorRecord[]);
     setRecords((dividendResult.data ?? []) as DividendRecord[]);
+    setIsMonthLocked(Boolean((closingResult.data as MonthlyClosingRecord | null)?.is_locked));
   }
 
   useEffect(() => {
@@ -252,6 +275,11 @@ export function DividendRecordsManager({
 
     setError("");
     setNotice("");
+
+    if (isMonthLocked) {
+      setError("当前月份已锁定，不能重新生成当月分红记录。");
+      return;
+    }
 
     if (records.length > 0) {
       setError("本月分红记录已存在，请勿重复生成。");
@@ -446,9 +474,6 @@ export function DividendRecordsManager({
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <h2 className="text-2xl font-bold text-ink">分红记录</h2>
-          <p className="mt-3 max-w-3xl text-sm leading-6 text-stone-600">
-            根据月度结算净利润和投资人持股比例，记录每月应分红金额、实发金额和发放状态。
-          </p>
         </div>
         <MonthToolbar
           month={month}
@@ -457,10 +482,14 @@ export function DividendRecordsManager({
             <button
               type="button"
               onClick={() => void handleGenerate()}
-              disabled={isGenerating || isLoading}
+              disabled={isGenerating || isLoading || isMonthLocked}
               className="rounded-lg bg-pine px-4 py-2 text-sm font-semibold text-white transition hover:bg-slateblue disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {isGenerating ? "生成中..." : "生成本月分红记录"}
+              {isMonthLocked
+                ? "月份已锁定"
+                : isGenerating
+                  ? "生成中..."
+                  : "生成本月分红记录"}
             </button>
           }
         />
@@ -475,6 +504,12 @@ export function DividendRecordsManager({
       {notice ? (
         <p className="mt-5 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
           {notice}
+        </p>
+      ) : null}
+
+      {isMonthLocked ? (
+        <p className="mt-5 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          当前月份已锁定，不能重新生成当月分红记录。
         </p>
       ) : null}
 
