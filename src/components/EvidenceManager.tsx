@@ -194,7 +194,7 @@ export function EvidenceManager({
         <div className="flex flex-wrap items-end justify-between gap-4 border-b border-stone-200 px-5 py-4">
           <div className="flex flex-wrap gap-4">
             <label className="text-sm font-medium text-ink">
-              月份
+              选择月份
               <MonthInput
                 value={month}
                 onChange={(event) => setMonth(event.target.value)}

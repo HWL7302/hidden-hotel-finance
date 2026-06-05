@@ -450,7 +450,7 @@ export function DividendRecordsManager({
           </p>
         </div>
         <label className="block text-sm font-medium text-ink">
-          月份筛选器
+          选择月份
           <MonthInput
             value={month}
             onChange={(event) => setMonth(event.target.value)}

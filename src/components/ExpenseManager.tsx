@@ -298,11 +298,11 @@ export function ExpenseManager({
         <div>
           <h2 className="text-2xl font-bold text-ink">支出管理</h2>
           <p className="mt-3 max-w-3xl text-sm leading-6 text-stone-600">
-            记录运营支出、成本和费用。Phase 2B 使用 Supabase `expenses` 表实现列表、新增、编辑、删除和月份筛选。
+            记录运营支出、成本和费用。Phase 2B 使用 Supabase `expenses` 表实现列表、新增、编辑、删除和按月查看。
           </p>
         </div>
         <label className="block text-sm font-medium text-ink">
-          筛选月份
+          选择月份
           <MonthInput
             value={month}
             onChange={(event) => setMonth(event.target.value)}

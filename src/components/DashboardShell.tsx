@@ -2,7 +2,7 @@ import Link from "next/link";
 import { SignOutButton } from "@/components/SignOutButton";
 
 const navigationItems = [
-  { href: "/dashboard", label: "首页仪表盘" },
+  { href: "/dashboard", label: "首页" },
   { href: "/dashboard/income", label: "收入管理" },
   { href: "/dashboard/expenses", label: "支出管理" },
   { href: "/dashboard/rooms", label: "房间/月租" },

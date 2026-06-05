@@ -1,11 +1,14 @@
 "use client";
 
 import {
+  ChangeEvent,
   InputHTMLAttributes,
   MouseEvent,
   SelectHTMLAttributes,
+  useEffect,
   useMemo,
-  useRef
+  useRef,
+  useState
 } from "react";
 
 type PickerInputElement = HTMLInputElement & {
@@ -28,6 +31,9 @@ type MonthSelectProps = Omit<
 
 const defaultClassName =
   "w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-pine focus:ring-2 focus:ring-pine/20";
+const monthOptionStart = "2026-05";
+const monthOptionEndYear = 2031;
+const monthOptionEndMonth = 12;
 
 function openPicker(input: PickerInputElement | null) {
   if (!input) {
@@ -95,30 +101,111 @@ function addMonths(value: string, offset: number) {
   return formatMonthOption(date.getUTCFullYear(), date.getUTCMonth() + 1);
 }
 
-function buildMonthOptions(startMonth = "2026-05", optionCount = 6) {
+function buildMonthOptions(startMonth = monthOptionStart) {
   const options: string[] = [];
+  let offset = 0;
 
-  for (let index = 0; index < optionCount; index += 1) {
-    options.push(addMonths(startMonth, index));
+  while (true) {
+    const option = addMonths(startMonth, offset);
+    const { year, month } = parseMonthValue(option);
+
+    if (
+      year > monthOptionEndYear ||
+      (year === monthOptionEndYear && month > monthOptionEndMonth)
+    ) {
+      break;
+    }
+
+    options.push(option);
+    offset += 1;
   }
 
   return options;
 }
 
 export function MonthInput(props: MonthSelectProps) {
-  const { className, ...selectProps } = props;
+  const {
+    className,
+    disabled,
+    onChange,
+    value,
+    defaultValue,
+    ...selectProps
+  } = props;
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const [isOpen, setIsOpen] = useState(false);
   const options = useMemo(() => buildMonthOptions(), []);
+  const initialValue =
+    typeof value === "string"
+      ? value
+      : typeof defaultValue === "string"
+        ? defaultValue
+        : options[0];
+  const [internalValue, setInternalValue] = useState(initialValue);
+  const selectedValue = typeof value === "string" ? value : internalValue;
+
+  useEffect(() => {
+    function handlePointerDown(event: PointerEvent) {
+      if (!wrapperRef.current?.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, []);
+
+  function handleSelect(nextValue: string) {
+    setInternalValue(nextValue);
+    setIsOpen(false);
+
+    if (onChange) {
+      onChange({
+        target: { value: nextValue },
+        currentTarget: { value: nextValue }
+      } as unknown as ChangeEvent<HTMLSelectElement>);
+    }
+  }
 
   return (
-    <select
-      className={className ?? `mt-2 block ${defaultClassName}`}
-      {...selectProps}
-    >
-      {options.map((option) => (
-        <option key={option} value={option}>
-          {option}
-        </option>
-      ))}
-    </select>
+    <div ref={wrapperRef} className="relative mt-2">
+      <select
+        className="sr-only"
+        disabled={disabled}
+        value={selectedValue}
+        onChange={(event) => handleSelect(event.target.value)}
+        {...selectProps}
+      >
+        {options.map((option) => (
+          <option key={option} value={option}>
+            {option}
+          </option>
+        ))}
+      </select>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => setIsOpen((current) => !current)}
+        className={className ?? `block text-left ${defaultClassName}`}
+      >
+        {selectedValue}
+      </button>
+      {isOpen ? (
+        <div className="absolute z-20 mt-1 max-h-[13.5rem] w-full overflow-y-auto rounded-md border border-stone-200 bg-white py-1 text-sm shadow-lg">
+          {options.map((option) => (
+            <button
+              key={option}
+              type="button"
+              onClick={() => handleSelect(option)}
+              className={`block w-full px-3 py-2 text-left hover:bg-stone-100 ${
+                option === selectedValue ? "bg-stone-100 font-medium" : ""
+              }`}
+            >
+              {option}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
   );
 }

@@ -378,11 +378,11 @@ export function IncomeManager({
         <div>
           <h2 className="text-2xl font-bold text-ink">收入管理</h2>
           <p className="mt-3 max-w-3xl text-sm leading-6 text-stone-600">
-            记录电竞酒店经营收入。Phase 2A 使用 Supabase `incomes` 表实现列表、新增、编辑、删除和月份筛选。
+            记录电竞酒店经营收入。Phase 2A 使用 Supabase `incomes` 表实现列表、新增、编辑、删除和按月查看。
           </p>
         </div>
         <label className="block text-sm font-medium text-ink">
-          筛选月份
+          选择月份
           <MonthInput
             value={month}
             onChange={(event) => setMonth(event.target.value)}
