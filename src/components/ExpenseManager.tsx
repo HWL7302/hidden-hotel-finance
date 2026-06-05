@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase-client";
 import { DateInput, MonthInput } from "@/components/DateInputs";
 import {
@@ -49,6 +50,19 @@ const emptyForm: ExpenseFormState = {
   note: ""
 };
 
+const payeeSuggestions: Record<string, string> = {
+  rent: "房东",
+  salary: "员工",
+  utilities: "水电费",
+  network: "网络服务商",
+  game_membership: "腾讯",
+  cleaning_supplies: "清洁用品供应商",
+  repair: "维修人员/维修公司",
+  platform_promotion: "平台推广",
+  renovation_equipment: "装修/设备供应商",
+  other: ""
+};
+
 function todayValue() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -91,7 +105,13 @@ export function ExpenseManager({
   storeLoadError: string;
 }) {
   const supabase = useMemo(() => createClient(), []);
-  const [month, setMonth] = useState(currentMonthValue());
+  const searchParams = useSearchParams();
+  const initialMonth = searchParams.get("month") ?? currentMonthValue();
+  const initialHighlightedId = searchParams.get("highlight");
+  const [month, setMonth] = useState(initialMonth);
+  const [highlightedId, setHighlightedId] = useState<string | null>(
+    initialHighlightedId
+  );
   const [expenses, setExpenses] = useState<ExpenseRecord[]>([]);
   const [form, setForm] = useState<ExpenseFormState>(emptyForm);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -101,6 +121,7 @@ export function ExpenseManager({
   const [isSaving, setIsSaving] = useState(false);
   const [evidenceFile, setEvidenceFile] = useState<File | null>(null);
   const [fileInputKey, setFileInputKey] = useState(0);
+  const [isPayeeManuallyEdited, setIsPayeeManuallyEdited] = useState(false);
 
   async function loadExpenses() {
     setError("");
@@ -138,6 +159,33 @@ export function ExpenseManager({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [month, defaultStoreId]);
 
+  useEffect(() => {
+    const nextHighlightedId = searchParams.get("highlight");
+    const nextMonth = searchParams.get("month");
+
+    if (nextMonth) {
+      setMonth(nextMonth);
+    }
+
+    if (!nextHighlightedId) {
+      return;
+    }
+
+    setHighlightedId(nextHighlightedId);
+    window.setTimeout(() => {
+      document.getElementById(`expense-${nextHighlightedId}`)?.scrollIntoView({
+        behavior: "smooth",
+        block: "center"
+      });
+    }, 250);
+
+    const timer = window.setTimeout(() => {
+      setHighlightedId(null);
+    }, 4500);
+
+    return () => window.clearTimeout(timer);
+  }, [searchParams]);
+
   function updateForm<K extends keyof ExpenseFormState>(
     key: K,
     value: ExpenseFormState[K]
@@ -148,6 +196,7 @@ export function ExpenseManager({
   function resetForm() {
     setEditingId(null);
     setEvidenceFile(null);
+    setIsPayeeManuallyEdited(false);
     setFileInputKey((current) => current + 1);
     setForm({ ...emptyForm, date: todayValue() });
   }
@@ -158,6 +207,7 @@ export function ExpenseManager({
 
   function startEdit(expense: ExpenseRecord) {
     setEditingId(expense.id);
+    setIsPayeeManuallyEdited(Boolean(expense.payee));
     setForm({
       date: expense.date,
       category: expense.category,
@@ -169,6 +219,21 @@ export function ExpenseManager({
     });
     setError("");
     setNotice("");
+  }
+
+  function handleCategoryChange(category: string) {
+    setForm((current) => ({
+      ...current,
+      category,
+      payee: isPayeeManuallyEdited
+        ? current.payee
+        : payeeSuggestions[category] ?? ""
+    }));
+  }
+
+  function handlePayeeChange(value: string) {
+    setIsPayeeManuallyEdited(true);
+    updateForm("payee", value);
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -346,7 +411,7 @@ export function ExpenseManager({
               <select
                 required
                 value={form.category}
-                onChange={(event) => updateForm("category", event.target.value)}
+                onChange={(event) => handleCategoryChange(event.target.value)}
                 className="mt-2 w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-pine focus:ring-2 focus:ring-pine/20"
               >
                 <option value="">请选择分类</option>
@@ -376,7 +441,7 @@ export function ExpenseManager({
               <input
                 type="text"
                 value={form.payee}
-                onChange={(event) => updateForm("payee", event.target.value)}
+                onChange={(event) => handlePayeeChange(event.target.value)}
                 placeholder="例如：物业、供应商"
                 className="mt-2 w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-pine focus:ring-2 focus:ring-pine/20"
               />
@@ -419,7 +484,7 @@ export function ExpenseManager({
                 type="file"
                 accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf"
                 onChange={handleEvidenceFileChange}
-                className="mt-2 block w-full text-sm text-stone-700"
+                className="mt-2 block w-full cursor-pointer rounded-lg border border-slate-300 bg-white text-sm text-stone-700 file:mr-4 file:cursor-pointer file:border-0 file:bg-pine/10 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-slateblue hover:file:bg-pine/20"
               />
               <span className="mt-1 block text-xs font-normal text-stone-500">
                 可选。支持 jpg、jpeg、png 和 pdf，保存支出后自动关联。
@@ -511,7 +576,15 @@ export function ExpenseManager({
                   </tr>
                 ) : (
                   expenses.map((expense) => (
-                    <tr key={expense.id}>
+                    <tr
+                      id={`expense-${expense.id}`}
+                      key={expense.id}
+                      className={`transition-colors ${
+                        highlightedId === expense.id
+                          ? "bg-pine/15 ring-2 ring-inset ring-pine/40"
+                          : ""
+                      }`}
+                    >
                       <td className="whitespace-nowrap px-4 py-3 text-stone-700">
                         {expense.date}
                       </td>

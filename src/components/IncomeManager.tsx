@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase-client";
 import { DateInput, MonthInput } from "@/components/DateInputs";
 import {
@@ -42,7 +43,7 @@ const emptyForm: IncomeFormState = {
   date: todayValue(),
   source: "",
   grossAmount: "",
-  feeAmount: "0.00",
+  feeAmount: "",
   netAmount: "0.00",
   settlementPeriod: currentMonthValue(),
   note: ""
@@ -126,7 +127,13 @@ export function IncomeManager({
   storeLoadError: string;
 }) {
   const supabase = useMemo(() => createClient(), []);
-  const [month, setMonth] = useState(currentMonthValue());
+  const searchParams = useSearchParams();
+  const initialMonth = searchParams.get("month") ?? currentMonthValue();
+  const initialHighlightedId = searchParams.get("highlight");
+  const [month, setMonth] = useState(initialMonth);
+  const [highlightedId, setHighlightedId] = useState<string | null>(
+    initialHighlightedId
+  );
   const [incomes, setIncomes] = useState<IncomeRecord[]>([]);
   const [form, setForm] = useState<IncomeFormState>(emptyForm);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -173,6 +180,33 @@ export function IncomeManager({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [month, defaultStoreId]);
 
+  useEffect(() => {
+    const nextHighlightedId = searchParams.get("highlight");
+    const nextMonth = searchParams.get("month");
+
+    if (nextMonth) {
+      setMonth(nextMonth);
+    }
+
+    if (!nextHighlightedId) {
+      return;
+    }
+
+    setHighlightedId(nextHighlightedId);
+    window.setTimeout(() => {
+      document.getElementById(`income-${nextHighlightedId}`)?.scrollIntoView({
+        behavior: "smooth",
+        block: "center"
+      });
+    }, 250);
+
+    const timer = window.setTimeout(() => {
+      setHighlightedId(null);
+    }, 4500);
+
+    return () => window.clearTimeout(timer);
+  }, [searchParams]);
+
   function updateForm<K extends keyof IncomeFormState>(
     key: K,
     value: IncomeFormState[K]
@@ -200,7 +234,7 @@ export function IncomeManager({
     setForm({
       ...emptyForm,
       date: todayValue(),
-      feeAmount: "0.00",
+      feeAmount: "",
       netAmount: "0.00",
       settlementPeriod: month
     });
@@ -497,7 +531,7 @@ export function IncomeManager({
                 type="file"
                 accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf"
                 onChange={handleEvidenceFileChange}
-                className="mt-2 block w-full text-sm text-stone-700"
+                className="mt-2 block w-full cursor-pointer rounded-lg border border-slate-300 bg-white text-sm text-stone-700 file:mr-4 file:cursor-pointer file:border-0 file:bg-pine/10 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-slateblue hover:file:bg-pine/20"
               />
               <span className="mt-1 block text-xs font-normal text-stone-500">
                 可选。支持 jpg、jpeg、png 和 pdf，保存收入后自动关联。
@@ -589,7 +623,15 @@ export function IncomeManager({
                   </tr>
                 ) : (
                   incomes.map((income) => (
-                    <tr key={income.id}>
+                    <tr
+                      id={`income-${income.id}`}
+                      key={income.id}
+                      className={`transition-colors ${
+                        highlightedId === income.id
+                          ? "bg-pine/15 ring-2 ring-inset ring-pine/40"
+                          : ""
+                      }`}
+                    >
                       <td className="whitespace-nowrap px-4 py-3 text-stone-700">
                         {income.date}
                       </td>

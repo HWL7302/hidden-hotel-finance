@@ -43,17 +43,19 @@ function getEvidenceTypeLabel(type: EvidenceType) {
   return "其他";
 }
 
-function getRelatedRecordLink(record: EvidenceRecord) {
+function getRelatedRecordLink(record: EvidenceRecord, month: string) {
   if (!record.related_table || !record.related_record_id) {
     return null;
   }
 
+  const search = `?highlight=${record.related_record_id}&month=${month}`;
+
   if (record.related_table === "incomes") {
-    return { href: "/dashboard/income", label: "查看收入记录" };
+    return { href: `/dashboard/income${search}`, label: "查看收入记录" };
   }
 
   if (record.related_table === "expenses") {
-    return { href: "/dashboard/expenses", label: "查看支出记录" };
+    return { href: `/dashboard/expenses${search}`, label: "查看支出记录" };
   }
 
   return null;
@@ -262,12 +264,12 @@ export function EvidenceManager({
                       {record.file_name}
                     </td>
                     <td className="px-4 py-3 text-stone-700">
-                      {getRelatedRecordLink(record) ? (
+                      {getRelatedRecordLink(record, month) ? (
                         <Link
-                          href={getRelatedRecordLink(record)!.href}
+                          href={getRelatedRecordLink(record, month)!.href}
                           className="font-medium text-pine hover:text-ink"
                         >
-                          {getRelatedRecordLink(record)!.label}
+                          {getRelatedRecordLink(record, month)!.label}
                         </Link>
                       ) : (
                         "—"

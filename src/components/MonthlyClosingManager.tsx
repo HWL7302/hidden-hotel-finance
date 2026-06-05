@@ -304,7 +304,7 @@ export function MonthlyClosingManager({
       <div className="mt-6 rounded-xl border border-slate-200 bg-white p-5 shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
         <h3 className="text-lg font-semibold text-ink">后续功能预留</h3>
         <p className="mt-3 text-sm leading-6 text-stone-600">
-          当前为月度结算第一版。后续将增加可分配利润、投资人比例、应分红金额、是否已分红、分红凭证、月份锁定和导出月报。
+          当前为月度结算第一版。后续将增加月份锁定和导出月报。
         </p>
       </div>
     </section>

@@ -449,13 +449,23 @@ export function DividendRecordsManager({
             根据月度结算净利润和投资人持股比例，记录每月应分红金额、实发金额和发放状态。
           </p>
         </div>
-        <label className="block min-w-40 text-sm font-medium text-ink lg:mr-[42%]">
-          选择月份
-          <MonthInput
-            value={month}
-            onChange={(event) => setMonth(event.target.value)}
-          />
-        </label>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end lg:mr-[30%]">
+          <label className="block min-w-40 text-sm font-medium text-ink">
+            选择月份
+            <MonthInput
+              value={month}
+              onChange={(event) => setMonth(event.target.value)}
+            />
+          </label>
+          <button
+            type="button"
+            onClick={() => void handleGenerate()}
+            disabled={isGenerating || isLoading}
+            className="rounded-lg bg-pine px-4 py-2 text-sm font-semibold text-white transition hover:bg-slateblue disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isGenerating ? "生成中..." : "生成本月分红记录"}
+          </button>
+        </div>
       </div>
 
       {error ? (
@@ -482,23 +492,6 @@ export function DividendRecordsManager({
             </p>
           </div>
         ))}
-      </div>
-
-      <div className="mt-6 flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-5 shadow-[0_8px_24px_rgba(15,23,42,0.04)] md:flex-row md:items-center md:justify-between">
-        <div>
-          <h3 className="text-lg font-semibold text-ink">生成分红记录</h3>
-          <p className="mt-2 text-sm leading-6 text-stone-600">
-            有利润就按月分红。可分配利润第一版等于本月净利润，净利润小于等于 0 时不生成分红。
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => void handleGenerate()}
-          disabled={isGenerating || isLoading}
-          className="rounded-md bg-pine px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {isGenerating ? "生成中..." : "生成本月分红记录"}
-        </button>
       </div>
 
       <div className="mt-6 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
