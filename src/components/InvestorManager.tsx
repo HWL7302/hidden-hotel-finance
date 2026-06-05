@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { DateInput } from "@/components/DateInputs";
@@ -651,7 +651,7 @@ export function InvestorManager({
 
       <form
         onSubmit={handleBaselineSubmit}
-        className="mt-4 flex flex-col gap-3 rounded-lg border border-stone-200 bg-white p-4 shadow-sm md:flex-row md:items-end"
+        className="mt-4 flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.04)] md:flex-row md:items-end"
       >
         <label className="block md:w-72">
           <span className="text-sm font-medium text-stone-700">
@@ -698,7 +698,7 @@ export function InvestorManager({
       <div className="mt-6 grid gap-6 xl:grid-cols-[420px_1fr]">
         <form
           onSubmit={handleSubmit}
-          className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm"
+          className="rounded-xl border border-slate-200 bg-white p-5 shadow-[0_8px_24px_rgba(15,23,42,0.04)]"
         >
           <div className="flex items-center justify-between gap-3">
             <h3 className="text-lg font-semibold text-ink">
@@ -824,13 +824,13 @@ export function InvestorManager({
         </form>
 
         <div className="space-y-6">
-          <div className="overflow-hidden rounded-lg border border-stone-200 bg-white shadow-sm">
+          <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
             <div className="border-b border-stone-200 px-5 py-4">
               <h3 className="text-lg font-semibold text-ink">投资人汇总</h3>
             </div>
             <div className="overflow-hidden">
               <table className="w-full table-fixed divide-y divide-stone-200 text-sm">
-                <thead className="bg-paper text-left text-stone-600">
+                <thead className="bg-slate-50 text-left text-slate-600">
                   <tr>
                     <TableHead>投资人姓名</TableHead>
                     <TableHead>累计投资金额（RMB）</TableHead>
@@ -877,7 +877,7 @@ export function InvestorManager({
             </div>
           </div>
 
-          <div className="overflow-hidden rounded-lg border border-stone-200 bg-white shadow-sm">
+          <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
             <div className="border-b border-stone-200 px-5 py-4">
               <h3 className="text-lg font-semibold text-ink">
                 投资人 / 投资记录列表
@@ -886,7 +886,7 @@ export function InvestorManager({
 
             <div className="overflow-hidden">
               <table className="w-full table-fixed divide-y divide-stone-200 text-sm">
-                <thead className="bg-paper text-left text-stone-600">
+                <thead className="bg-slate-50 text-left text-slate-600">
                   <tr>
                     <TableHead className="w-28">投资人姓名</TableHead>
                     <TableHead className="w-24">投资类型</TableHead>
@@ -998,3 +998,4 @@ function TableCell({ children }: { children: React.ReactNode }) {
     </td>
   );
 }
+

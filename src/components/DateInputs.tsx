@@ -30,7 +30,7 @@ type MonthSelectProps = Omit<
 };
 
 const defaultClassName =
-  "w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-pine focus:ring-2 focus:ring-pine/20";
+  "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-pine focus:ring-2 focus:ring-pine/20";
 const monthOptionStart = "2026-05";
 const monthOptionEndYear = 2031;
 const monthOptionEndMonth = 12;
@@ -191,14 +191,14 @@ export function MonthInput(props: MonthSelectProps) {
         {selectedValue}
       </button>
       {isOpen ? (
-        <div className="absolute z-20 mt-1 max-h-[13.5rem] w-full overflow-y-auto rounded-md border border-stone-200 bg-white py-1 text-sm shadow-lg">
+        <div className="absolute z-20 mt-1 max-h-[13.5rem] w-full overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 text-sm shadow-lg">
           {options.map((option) => (
             <button
               key={option}
               type="button"
               onClick={() => handleSelect(option)}
-              className={`block w-full px-3 py-2 text-left hover:bg-stone-100 ${
-                option === selectedValue ? "bg-stone-100 font-medium" : ""
+              className={`block w-full px-3 py-2 text-left hover:bg-slate-50 ${
+                option === selectedValue ? "bg-pine/10 font-medium text-ink" : ""
               }`}
             >
               {option}

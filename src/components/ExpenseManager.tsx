@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase-client";
@@ -325,7 +325,7 @@ export function ExpenseManager({
       <div className="mt-6 grid gap-6 xl:grid-cols-[380px_1fr]">
         <form
           onSubmit={handleSubmit}
-          className="rounded-lg border border-stone-200 bg-white p-6 shadow-sm"
+          className="rounded-xl border border-slate-200 bg-white p-6 shadow-[0_8px_24px_rgba(15,23,42,0.04)]"
         >
           <h3 className="text-lg font-semibold text-ink">
             {editingId ? "编辑支出" : "新增支出"}
@@ -442,7 +442,7 @@ export function ExpenseManager({
             <button
               type="submit"
               disabled={isSaving}
-              className="rounded-md bg-pine px-4 py-2 text-sm font-semibold text-white transition hover:bg-ink disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-md bg-pine px-4 py-2 text-sm font-semibold text-white transition hover:bg-slateblue disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isSaving ? "保存中..." : editingId ? "保存修改" : "新增支出"}
             </button>
@@ -469,7 +469,7 @@ export function ExpenseManager({
           </button>
         </form>
 
-        <div className="rounded-lg border border-stone-200 bg-white shadow-sm">
+        <div className="rounded-xl border border-slate-200 bg-white shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
           <div className="flex items-center justify-between border-b border-stone-200 px-5 py-4">
             <h3 className="text-lg font-semibold text-ink">支出列表</h3>
             <button
@@ -483,7 +483,7 @@ export function ExpenseManager({
 
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-stone-200 text-sm">
-              <thead className="bg-stone-50 text-left text-stone-600">
+              <thead className="bg-slate-50 text-left text-slate-600">
                 <tr>
                   <th className="px-4 py-3 font-semibold">日期</th>
                   <th className="px-4 py-3 font-semibold">分类</th>
@@ -577,3 +577,4 @@ export function ExpenseManager({
     </section>
   );
 }
+

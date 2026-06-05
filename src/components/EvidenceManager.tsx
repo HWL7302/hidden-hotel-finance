@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -190,7 +190,7 @@ export function EvidenceManager({
         </p>
       ) : null}
 
-      <div className="mt-6 rounded-lg border border-stone-200 bg-white shadow-sm">
+      <div className="mt-6 rounded-xl border border-slate-200 bg-white shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
         <div className="flex flex-wrap items-end justify-between gap-4 border-b border-stone-200 px-5 py-4">
           <div className="flex flex-wrap gap-4">
             <label className="text-sm font-medium text-ink">
@@ -227,7 +227,7 @@ export function EvidenceManager({
 
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-stone-200 text-sm">
-            <thead className="bg-stone-50 text-left text-stone-600">
+            <thead className="bg-slate-50 text-left text-slate-600">
               <tr>
                 <th className="px-4 py-3 font-semibold">上传时间</th>
                 <th className="px-4 py-3 font-semibold">类型</th>
@@ -303,3 +303,4 @@ export function EvidenceManager({
     </section>
   );
 }
+

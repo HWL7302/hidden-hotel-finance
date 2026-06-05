@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { DateInput, MonthInput } from "@/components/DateInputs";
@@ -474,7 +474,7 @@ export function DividendRecordsManager({
         {cards.map((card) => (
           <div
             key={card.label}
-            className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm"
+            className="rounded-xl border border-slate-200 bg-white p-5 shadow-[0_8px_24px_rgba(15,23,42,0.04)]"
           >
             <p className="text-sm font-medium text-stone-600">{card.label}</p>
             <p className="mt-3 text-2xl font-bold text-ink">
@@ -484,7 +484,7 @@ export function DividendRecordsManager({
         ))}
       </div>
 
-      <div className="mt-6 flex flex-col gap-3 rounded-lg border border-stone-200 bg-white p-5 shadow-sm md:flex-row md:items-center md:justify-between">
+      <div className="mt-6 flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-5 shadow-[0_8px_24px_rgba(15,23,42,0.04)] md:flex-row md:items-center md:justify-between">
         <div>
           <h3 className="text-lg font-semibold text-ink">生成分红记录</h3>
           <p className="mt-2 text-sm leading-6 text-stone-600">
@@ -501,13 +501,13 @@ export function DividendRecordsManager({
         </button>
       </div>
 
-      <div className="mt-6 overflow-hidden rounded-lg border border-stone-200 bg-white shadow-sm">
+      <div className="mt-6 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
         <div className="border-b border-stone-200 px-5 py-4">
           <h3 className="text-lg font-semibold text-ink">本月分红明细</h3>
         </div>
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-stone-200 text-sm">
-            <thead className="bg-paper text-left text-stone-600">
+            <thead className="bg-slate-50 text-left text-slate-600">
               <tr>
                 <TableHead>投资人姓名</TableHead>
                 <TableHead>当前持股比例</TableHead>
@@ -593,7 +593,7 @@ export function DividendRecordsManager({
       {editingRecord ? (
         <form
           onSubmit={handleEditSubmit}
-          className="mt-6 rounded-lg border border-stone-200 bg-white p-5 shadow-sm"
+          className="mt-6 rounded-xl border border-slate-200 bg-white p-5 shadow-[0_8px_24px_rgba(15,23,42,0.04)]"
         >
           <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
             <div>
@@ -701,3 +701,4 @@ function TableCell({ children }: { children: React.ReactNode }) {
     </td>
   );
 }
+

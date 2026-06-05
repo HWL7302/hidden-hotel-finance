@@ -1,4 +1,4 @@
-export function ModulePlaceholder({
+﻿export function ModulePlaceholder({
   title,
   description
 }: {
@@ -11,7 +11,7 @@ export function ModulePlaceholder({
       <p className="mt-3 max-w-3xl text-sm leading-6 text-stone-600">
         {description}
       </p>
-      <div className="mt-6 rounded-lg border border-stone-200 bg-white p-6 shadow-sm">
+      <div className="mt-6 rounded-xl border border-slate-200 bg-white p-6 shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
         <p className="text-sm font-medium text-stone-700">
           Phase 1 仅提供模块入口和权限预留，完整录入、查询、导出和统计将在后续阶段实现。
         </p>
@@ -19,3 +19,4 @@ export function ModulePlaceholder({
     </section>
   );
 }
+

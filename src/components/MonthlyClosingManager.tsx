@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -262,7 +262,7 @@ export function MonthlyClosingManager({
         {cards.map((card) => (
           <div
             key={card.label}
-            className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm"
+            className="rounded-xl border border-slate-200 bg-white p-5 shadow-[0_8px_24px_rgba(15,23,42,0.04)]"
           >
             <p className="text-sm font-medium text-stone-600">{card.label}</p>
             <p className="mt-3 text-2xl font-bold text-ink">
@@ -301,7 +301,7 @@ export function MonthlyClosingManager({
         />
       </div>
 
-      <div className="mt-6 rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
+      <div className="mt-6 rounded-xl border border-slate-200 bg-white p-5 shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
         <h3 className="text-lg font-semibold text-ink">后续功能预留</h3>
         <p className="mt-3 text-sm leading-6 text-stone-600">
           当前为月度结算第一版。后续将增加可分配利润、投资人比例、应分红金额、是否已分红、分红凭证、月份锁定和导出月报。
@@ -325,13 +325,13 @@ function SummaryTable({
   isLoading: boolean;
 }) {
   return (
-    <div className="rounded-lg border border-stone-200 bg-white shadow-sm">
+    <div className="rounded-xl border border-slate-200 bg-white shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
       <div className="border-b border-stone-200 px-5 py-4">
         <h3 className="text-lg font-semibold text-ink">{title}</h3>
       </div>
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-stone-200 text-sm">
-          <thead className="bg-stone-50 text-left text-stone-600">
+          <thead className="bg-slate-50 text-left text-slate-600">
             <tr>
               {headers.map((header) => (
                 <th key={header} className="px-4 py-3 font-semibold">
@@ -377,3 +377,4 @@ function SummaryTable({
     </div>
   );
 }
+

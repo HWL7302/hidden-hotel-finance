@@ -9,10 +9,11 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        ink: "#17201a",
-        paper: "#f7f5ef",
-        pine: "#1f4d3a",
-        brass: "#b6823f"
+        ink: "#2f2d4a",
+        paper: "#f5f7f9",
+        pine: "#48b8b0",
+        brass: "#5fc9c1",
+        slateblue: "#34324a"
       }
     }
   },

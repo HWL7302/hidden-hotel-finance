@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -46,7 +46,7 @@ export function LoginForm() {
           onChange={(event) => setEmail(event.target.value)}
           required
           autoComplete="email"
-          className="mt-2 w-full rounded-md border border-stone-300 bg-white px-4 py-3 text-base outline-none transition focus:border-pine focus:ring-2 focus:ring-pine/20"
+          className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-base outline-none transition focus:border-pine focus:ring-2 focus:ring-pine/20"
         />
       </div>
       <div>
@@ -60,7 +60,7 @@ export function LoginForm() {
           onChange={(event) => setPassword(event.target.value)}
           required
           autoComplete="current-password"
-          className="mt-2 w-full rounded-md border border-stone-300 bg-white px-4 py-3 text-base outline-none transition focus:border-pine focus:ring-2 focus:ring-pine/20"
+          className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-base outline-none transition focus:border-pine focus:ring-2 focus:ring-pine/20"
         />
       </div>
       {error ? (
@@ -71,10 +71,11 @@ export function LoginForm() {
       <button
         type="submit"
         disabled={isLoading}
-        className="w-full rounded-md bg-pine px-4 py-3 text-base font-semibold text-white transition hover:bg-ink disabled:cursor-not-allowed disabled:opacity-60"
+        className="w-full rounded-lg bg-pine px-4 py-3 text-base font-semibold text-white transition hover:bg-slateblue disabled:cursor-not-allowed disabled:opacity-60"
       >
         {isLoading ? "登录中..." : "邮箱密码登录"}
       </button>
     </form>
   );
 }
+

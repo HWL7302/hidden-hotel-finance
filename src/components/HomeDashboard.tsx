@@ -276,11 +276,9 @@ export function HomeDashboard({
     <section>
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-ink">
-            Hidden Hotel 财务首页
-          </h2>
+          <h2 className="text-2xl font-bold text-ink">首页</h2>
           <p className="mt-3 max-w-3xl text-sm leading-6 text-stone-600">
-            汇总当前月份经营结果、投资登记、分红发放和本月提醒，用于快速查看项目经营状态。
+            汇总当前月份经营结果、投资登记、分红发放和经营提醒，用于快速查看项目经营状态。
           </p>
         </div>
         <label className="block text-sm font-medium text-ink">
@@ -308,9 +306,9 @@ export function HomeDashboard({
         {operationCards.map((card) => (
           <div
             key={card.label}
-            className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm"
+            className="rounded-xl border border-slate-200 bg-white p-5 shadow-[0_8px_24px_rgba(15,23,42,0.04)]"
           >
-            <p className="text-sm text-stone-500">{card.label}</p>
+            <p className="text-sm font-medium text-slate-500">{card.label}</p>
             <p className="mt-3 text-2xl font-semibold text-ink">
               {card.value}
             </p>
@@ -322,9 +320,9 @@ export function HomeDashboard({
         {investmentCards.map((card) => (
           <div
             key={card.label}
-            className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm"
+            className="rounded-xl border border-slate-200 bg-white p-5 shadow-[0_8px_24px_rgba(15,23,42,0.04)]"
           >
-            <p className="text-sm text-stone-500">{card.label}</p>
+            <p className="text-sm font-medium text-slate-500">{card.label}</p>
             <p className="mt-3 text-2xl font-semibold text-ink">
               {card.value}
             </p>
@@ -332,12 +330,12 @@ export function HomeDashboard({
         ))}
       </div>
 
-      <div className="mt-6 rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
-        <h3 className="text-lg font-semibold text-ink">本月提醒</h3>
+      <div className="mt-6 rounded-xl border border-slate-200 bg-white p-5 shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
+        <h3 className="text-lg font-semibold text-ink">经营提醒</h3>
         {hasReminder ? (
           <ul className="mt-4 grid gap-3 text-sm text-stone-700 sm:grid-cols-2 xl:grid-cols-3">
             {reminders.map((item) => (
-              <li key={item} className="rounded-md bg-stone-50 px-3 py-2">
+              <li key={item} className="rounded-lg bg-slate-50 px-3 py-2">
                 {item}
               </li>
             ))}
