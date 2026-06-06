@@ -349,7 +349,7 @@ export function MonthlyClosingManager({
                 type="button"
                 onClick={() => void handleToggleMonthLock()}
                 disabled={isLockSaving || isLoading || isMonthLockPermissionMissing}
-                className="rounded-lg border border-pine/40 px-4 py-2 text-sm font-semibold text-slateblue transition hover:bg-pine/10 disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-lg bg-pine px-4 py-2 text-sm font-semibold text-white transition hover:bg-slateblue disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isMonthLockPermissionMissing
                   ? "等待授权"
