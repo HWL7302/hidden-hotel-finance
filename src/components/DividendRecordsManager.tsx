@@ -25,6 +25,12 @@ type InvestorRecord = {
   is_active: boolean;
 };
 
+type InvestorProfile = {
+  id: string;
+  investment_amount: string | number | null;
+  share_ratio: string | number | null;
+};
+
 type DividendRecord = {
   id: string;
   store_id: string;
@@ -109,12 +115,10 @@ function todayValue() {
 
 export function DividendRecordsManager({
   currentRole,
-  userEmail,
   defaultStoreId,
   storeLoadError
 }: {
   currentRole: AppRole;
-  userEmail: string;
   defaultStoreId: string | null;
   storeLoadError: string;
 }) {
@@ -202,19 +206,16 @@ export function DividendRecordsManager({
     setIsLoading(true);
 
     const range = getMonthRange(month);
-    const normalizedEmail = userEmail.trim().toLowerCase();
     const isInvestorView = currentRole === "viewer";
 
-    let investorQuery = supabase
-      .from("investors")
-      .select("id,name,email,investment_amount,share_ratio,is_active")
-      .eq("store_id", defaultStoreId)
-      .eq("is_active", true)
-      .order("created_at", { ascending: true });
-
-    if (isInvestorView) {
-      investorQuery = investorQuery.ilike("email", normalizedEmail);
-    }
+    const investorQuery = isInvestorView
+      ? supabase.rpc("current_investor_profile")
+      : supabase
+          .from("investors")
+          .select("id,name,email,investment_amount,share_ratio,is_active")
+          .eq("store_id", defaultStoreId)
+          .eq("is_active", true)
+          .order("created_at", { ascending: true });
 
     const [incomeResult, expenseResult, investorResult, closingResult] =
       await Promise.all([
@@ -256,16 +257,20 @@ export function DividendRecordsManager({
       return;
     }
 
-    const loadedInvestors = (investorResult.data ?? []) as InvestorRecord[];
-    const matchedInvestor = isInvestorView ? loadedInvestors[0] ?? null : null;
+    const loadedInvestors = isInvestorView
+      ? []
+      : ((investorResult.data ?? []) as InvestorRecord[]);
+    const matchedInvestorId = isInvestorView
+      ? ((investorResult.data as InvestorProfile[] | null)?.[0]?.id ?? null)
+      : null;
 
-    if (isInvestorView && !matchedInvestor) {
+    if (isInvestorView && !matchedInvestorId) {
       setIncomes((incomeResult.data ?? []) as IncomeRecord[]);
       setExpenses((expenseResult.data ?? []) as ExpenseRecord[]);
       setInvestors([]);
       setRecords([]);
       setIsMonthLocked(Boolean((closingResult.data as MonthlyClosingRecord | null)?.is_locked));
-      setError("当前登录邮箱未匹配到投资人记录，暂无可查看的分红数据。");
+      setError("当前账号尚未绑定投资人信息，请联系管理员确认登录邮箱。");
       return;
     }
 
@@ -278,8 +283,8 @@ export function DividendRecordsManager({
       .eq("settlement_month", selectedMonthStart)
       .order("created_at", { ascending: true });
 
-    if (isInvestorView && matchedInvestor) {
-      dividendQuery = dividendQuery.eq("investor_id", matchedInvestor.id);
+    if (isInvestorView && matchedInvestorId) {
+      dividendQuery = dividendQuery.eq("investor_id", matchedInvestorId);
     }
 
     const dividendResult = await dividendQuery;

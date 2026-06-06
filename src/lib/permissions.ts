@@ -2,7 +2,6 @@ export const ADMIN_EMAIL = "kiu9ninomi@gmail.com";
 
 export const roleOptions = [
   { value: "admin", label: "管理员" },
-  { value: "manager", label: "管理方" },
   { value: "operator", label: "经营方" },
   { value: "viewer", label: "投资人" }
 ] as const;
@@ -26,6 +25,7 @@ export type PermissionAction =
   | "manageExpenses"
   | "uploadEvidence"
   | "deleteEvidence"
+  | "batchDownloadEvidence"
   | "toggleMonthLock"
   | "manageInvestors"
   | "manageInvestorPermissions"
@@ -60,37 +60,37 @@ export const navigationItems: {
 
 const pageAccess: Record<AppRole, DashboardPageKey[]> = {
   admin: navigationItems.map((item) => item.key),
-  manager: [
+  operator: ["home", "income", "expenses", "rooms", "monthlyClosing", "evidence"],
+  viewer: [
     "home",
     "income",
     "expenses",
     "rooms",
     "monthlyClosing",
-    "investors",
     "dividends",
-    "evidence"
-  ],
-  operator: ["home", "income", "expenses", "monthlyClosing", "evidence", "reports"],
-  viewer: ["home", "rooms", "monthlyClosing", "dividends", "evidence", "reports"]
+    "evidence",
+    "reports"
+  ]
 };
 
 const actionAccess: Record<
   Exclude<PermissionAction, "deleteDividendRecord">,
   AppRole[]
 > = {
-  manageIncome: ["admin", "manager", "operator"],
-  manageExpenses: ["admin", "manager", "operator"],
-  uploadEvidence: ["admin", "manager", "operator"],
-  deleteEvidence: ["admin", "manager", "operator"],
-  toggleMonthLock: ["admin", "manager"],
+  manageIncome: ["admin", "operator"],
+  manageExpenses: ["admin", "operator"],
+  uploadEvidence: ["admin", "operator"],
+  deleteEvidence: ["admin"],
+  batchDownloadEvidence: ["admin", "viewer"],
+  toggleMonthLock: ["admin"],
   manageInvestors: ["admin"],
   manageInvestorPermissions: ["admin"],
-  manageInvestmentBaseline: ["admin", "manager"],
-  generateDividends: ["admin", "manager"],
-  refreshDividends: ["admin", "manager"],
-  editDividends: ["admin", "manager"],
-  markDividendsPaid: ["admin", "manager"],
-  markDividendsDeferred: ["admin", "manager"]
+  manageInvestmentBaseline: ["admin"],
+  generateDividends: ["admin"],
+  refreshDividends: ["admin"],
+  editDividends: ["admin"],
+  markDividendsPaid: ["admin"],
+  markDividendsDeferred: ["admin"]
 };
 
 export function normalizeRole(value: string | null | undefined): AppRole {
@@ -117,11 +117,7 @@ export function canPerform(
   context: PermissionContext = {}
 ) {
   if (action === "deleteDividendRecord") {
-    if (role === "admin") {
-      return true;
-    }
-
-    return role === "manager" && context.dividendStatus !== "paid";
+    return role === "admin" && context.dividendStatus !== undefined;
   }
 
   return actionAccess[action].includes(role);

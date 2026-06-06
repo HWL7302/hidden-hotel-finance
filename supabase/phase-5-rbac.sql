@@ -16,6 +16,10 @@ update public.investors
 set permission_role = 'viewer'
 where permission_role is null;
 
+update public.investors
+set permission_role = 'viewer'
+where permission_role = 'manager';
+
 alter table public.investors
   alter column permission_role set default 'viewer',
   alter column permission_role set not null;
@@ -25,7 +29,7 @@ alter table public.investors
 
 alter table public.investors
   add constraint investors_permission_role_check
-  check (permission_role in ('viewer', 'operator', 'manager', 'admin'));
+  check (permission_role in ('viewer', 'operator', 'admin'));
 
 create index if not exists investors_email_lower_idx
   on public.investors (lower(email));
@@ -45,7 +49,7 @@ as $$
         (
           select i.permission_role
           from public.investors i
-          where lower(i.email) = lower(coalesce(auth.jwt() ->> 'email', ''))
+          where trim(lower(i.email)) = trim(lower(coalesce(auth.jwt() ->> 'email', '')))
             and i.is_active = true
           order by i.created_at desc
           limit 1

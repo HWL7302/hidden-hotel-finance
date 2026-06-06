@@ -32,6 +32,12 @@ type FinanceSetting = {
   investment_baseline: string | number | null;
 };
 
+type InvestorProfile = {
+  id: string;
+  investment_amount: string | number | null;
+  share_ratio: string | number | null;
+};
+
 type DividendRecord = {
   paid_amount: string | number | null;
   status: string;
@@ -110,6 +116,9 @@ export function HomeDashboard({
   const [financeSetting, setFinanceSetting] = useState<FinanceSetting | null>(
     null
   );
+  const [currentInvestor, setCurrentInvestor] = useState<InvestorProfile | null>(
+    null
+  );
   const [monthlyDividends, setMonthlyDividends] = useState<DividendRecord[]>([]);
   const [paidDividends, setPaidDividends] = useState<DividendRecord[]>([]);
   const [trendIncomes, setTrendIncomes] = useState<TrendIncomeRecord[]>([]);
@@ -132,6 +141,59 @@ export function HomeDashboard({
       start: `${trendMonths[0]}-01`,
       end: getMonthRange(trendMonths[trendMonths.length - 1]).end
     };
+
+    const isInvestorView = currentRole === "viewer";
+    const shouldLoadInvestmentSummary = currentRole === "admin" || isInvestorView;
+    let currentInvestorId: string | null = null;
+
+    if (isInvestorView) {
+      const { data: investor, error: investorError } = await supabase
+        .rpc("current_investor_profile")
+        .maybeSingle();
+
+      if (investorError) {
+        setIsLoading(false);
+        setError(investorError.message);
+        return;
+      }
+
+      currentInvestorId = (investor as InvestorProfile | null)?.id ?? null;
+      setCurrentInvestor((investor as InvestorProfile | null) ?? null);
+    } else {
+      setCurrentInvestor(null);
+    }
+
+    const investmentQuery =
+      shouldLoadInvestmentSummary && (!isInvestorView || currentInvestorId)
+        ? supabase
+            .from("investment_records")
+            .select("amount")
+            .eq("store_id", defaultStoreId)
+        : null;
+    const monthlyDividendQuery =
+      shouldLoadInvestmentSummary && (!isInvestorView || currentInvestorId)
+        ? supabase
+            .from("dividend_records")
+            .select("paid_amount,status")
+            .eq("store_id", defaultStoreId)
+            .gte("settlement_month", range.start)
+            .lt("settlement_month", range.end)
+        : null;
+    const paidDividendQuery =
+      shouldLoadInvestmentSummary && (!isInvestorView || currentInvestorId)
+        ? supabase
+            .from("dividend_records")
+            .select("paid_amount,status")
+            .eq("store_id", defaultStoreId)
+            .eq("status", "paid")
+        : null;
+
+    if (isInvestorView && currentInvestorId) {
+      investmentQuery?.eq("investor_id", currentInvestorId);
+      monthlyDividendQuery?.eq("investor_id", currentInvestorId);
+      paidDividendQuery?.eq("investor_id", currentInvestorId);
+    }
+
     const [
       incomeResult,
       expenseResult,
@@ -154,26 +216,16 @@ export function HomeDashboard({
         .eq("store_id", defaultStoreId)
         .gte("date", range.start)
         .lt("date", range.end),
-      supabase
-        .from("investment_records")
-        .select("amount")
-        .eq("store_id", defaultStoreId),
-      supabase
-        .from("store_finance_settings")
-        .select("investment_baseline")
-        .eq("store_id", defaultStoreId)
-        .maybeSingle(),
-      supabase
-        .from("dividend_records")
-        .select("paid_amount,status")
-        .eq("store_id", defaultStoreId)
-        .gte("settlement_month", range.start)
-        .lt("settlement_month", range.end),
-      supabase
-        .from("dividend_records")
-        .select("paid_amount,status")
-        .eq("store_id", defaultStoreId)
-        .eq("status", "paid"),
+      investmentQuery ?? Promise.resolve({ data: [], error: null }),
+      currentRole === "admin"
+        ? supabase
+            .from("store_finance_settings")
+            .select("investment_baseline")
+            .eq("store_id", defaultStoreId)
+            .maybeSingle()
+        : Promise.resolve({ data: null, error: null }),
+      monthlyDividendQuery ?? Promise.resolve({ data: [], error: null }),
+      paidDividendQuery ?? Promise.resolve({ data: [], error: null }),
       supabase
         .from("incomes")
         .select("net_amount,evidence_file,settlement_period")
@@ -220,7 +272,7 @@ export function HomeDashboard({
   useEffect(() => {
     void loadDashboard();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [defaultStoreId, month]);
+  }, [currentRole, defaultStoreId, month]);
 
   const summary = useMemo(() => {
     const totalIncome = incomes.reduce(
@@ -236,10 +288,13 @@ export function HomeDashboard({
     }, BigInt(0));
     const netProfit = totalIncome - totalExpense;
     const distributableProfit = netProfit > BigInt(0) ? netProfit : BigInt(0);
-    const registeredInvestment = investments.reduce(
-      (sum, record) => sum + amountToCents(record.amount),
-      BigInt(0)
-    );
+    const registeredInvestment =
+      currentRole === "viewer" && currentInvestor
+        ? amountToCents(currentInvestor.investment_amount)
+        : investments.reduce(
+            (sum, record) => sum + amountToCents(record.amount),
+            BigInt(0)
+          );
     const baseline = amountToCents(
       financeSetting?.investment_baseline ?? "420000"
     );
@@ -248,9 +303,11 @@ export function HomeDashboard({
       BigInt(0)
     );
     const registeredShareRatio =
-      baseline > BigInt(0)
-        ? (Number(registeredInvestment) / Number(baseline)) * 100
-        : 0;
+      currentRole === "viewer" && currentInvestor
+        ? Number(currentInvestor.share_ratio ?? 0) * 100
+        : baseline > BigInt(0)
+          ? (Number(registeredInvestment) / Number(baseline)) * 100
+          : 0;
     const paybackProgress =
       registeredInvestment > BigInt(0)
         ? (Number(paidDividendAmount) / Number(registeredInvestment)) * 100
@@ -280,33 +337,47 @@ export function HomeDashboard({
       expenseWithoutEvidenceCount,
       unpaidDividendCount
     };
-  }, [expenses, financeSetting, incomes, investments, monthlyDividends, paidDividends]);
+  }, [
+    currentInvestor,
+    currentRole,
+    expenses,
+    financeSetting,
+    incomes,
+    investments,
+    monthlyDividends,
+    paidDividends
+  ]);
 
   const operationCards = [
     { label: "本月收入", value: formatMoney(summary.totalIncome) },
     { label: "本月支出", value: formatMoney(summary.totalExpense) },
     { label: "本月净利润", value: formatMoney(summary.netProfit) },
-    { label: "可分红金额", value: formatMoney(summary.distributableProfit) }
+    ...(currentRole === "operator"
+      ? []
+      : [{ label: "可分红金额", value: formatMoney(summary.distributableProfit) }])
   ];
 
-  const investmentCards = [
-    {
-      label: "当前登记投资额",
-      value: formatMoney(summary.registeredInvestment)
-    },
-    {
-      label: "当前登记股份",
-      value: formatPercent(summary.registeredShareRatio)
-    },
-    {
-      label: "累计已发放分红",
-      value: formatMoney(summary.paidDividendAmount)
-    },
-    {
-      label: "总回本进度",
-      value: formatPercent(summary.paybackProgress)
-    }
-  ];
+  const investmentCards =
+    currentRole === "operator"
+      ? []
+      : [
+          {
+            label: currentRole === "viewer" ? "我的投资额" : "当前登记投资额",
+            value: formatMoney(summary.registeredInvestment)
+          },
+          {
+            label: currentRole === "viewer" ? "我的股份占比" : "当前登记股份",
+            value: formatPercent(summary.registeredShareRatio)
+          },
+          {
+            label: currentRole === "viewer" ? "我的累计分红" : "累计已发放分红",
+            value: formatMoney(summary.paidDividendAmount)
+          },
+          {
+            label: currentRole === "viewer" ? "我的回本进度" : "总回本进度",
+            value: formatPercent(summary.paybackProgress)
+          }
+        ];
 
   const trendData = useMemo(() => {
     const months = buildTrendMonths(month);
@@ -387,7 +458,11 @@ export function HomeDashboard({
         </p>
       ) : null}
 
-      <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div
+        className={`mt-6 grid gap-4 sm:grid-cols-2 ${
+          operationCards.length === 3 ? "xl:grid-cols-3" : "xl:grid-cols-4"
+        }`}
+      >
         {operationCards.map((card) => (
           <div
             key={card.label}
@@ -461,19 +536,21 @@ export function HomeDashboard({
         </div>
       </div>
 
-      <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {investmentCards.map((card) => (
-          <div
-            key={card.label}
-            className="rounded-xl border border-slate-200 bg-white p-5 shadow-[0_8px_24px_rgba(15,23,42,0.04)]"
-          >
-            <p className="text-sm font-medium text-slate-500">{card.label}</p>
-            <p className="mt-3 text-2xl font-semibold text-ink">
-              {card.value}
-            </p>
-          </div>
-        ))}
-      </div>
+      {investmentCards.length > 0 ? (
+        <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {investmentCards.map((card) => (
+            <div
+              key={card.label}
+              className="rounded-xl border border-slate-200 bg-white p-5 shadow-[0_8px_24px_rgba(15,23,42,0.04)]"
+            >
+              <p className="text-sm font-medium text-slate-500">{card.label}</p>
+              <p className="mt-3 text-2xl font-semibold text-ink">
+                {card.value}
+              </p>
+            </div>
+          ))}
+        </div>
+      ) : null}
 
       {currentRole === "admin" ? (
         <div className="mt-6 rounded-xl border border-slate-200 bg-white p-5 shadow-[0_8px_24px_rgba(15,23,42,0.04)]">

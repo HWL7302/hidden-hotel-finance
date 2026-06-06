@@ -73,6 +73,7 @@ export function EvidenceManager({
 }) {
   const supabase = useMemo(() => createClient(), []);
   const canManage = canPerform(currentRole, "deleteEvidence");
+  const canBatchDownload = canPerform(currentRole, "batchDownloadEvidence");
   const [records, setRecords] = useState<EvidenceRecord[]>([]);
   const [month, setMonth] = useState(getCurrentMonth);
   const [typeFilter, setTypeFilter] = useState<EvidenceFilter>("all");
@@ -221,13 +222,15 @@ export function EvidenceManager({
               </select>
             </label>
           </div>
-          <button
-            type="button"
-            disabled
-            className="rounded-md border border-stone-300 px-4 py-2 text-sm font-medium text-stone-500 disabled:cursor-not-allowed disabled:opacity-70"
-          >
-            批量下载（预留）
-          </button>
+          {canBatchDownload ? (
+            <button
+              type="button"
+              disabled
+              className="rounded-md border border-stone-300 px-4 py-2 text-sm font-medium text-stone-500 disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              批量下载（预留）
+            </button>
+          ) : null}
         </div>
 
         <div className="overflow-x-auto">

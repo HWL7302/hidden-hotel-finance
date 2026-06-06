@@ -99,7 +99,7 @@ create table public.investors (
   email text,
   contact text,
   permission_role text not null default 'viewer' check (
-    permission_role in ('viewer', 'operator', 'manager', 'admin')
+    permission_role in ('viewer', 'operator', 'admin')
   ),
   user_id uuid references auth.users(id),
   investment_amount numeric not null default 0 check (investment_amount >= 0),
@@ -308,7 +308,7 @@ as $$
         (
           select i.permission_role
           from public.investors i
-          where lower(i.email) = lower(coalesce(auth.jwt() ->> 'email', ''))
+          where trim(lower(i.email)) = trim(lower(coalesce(auth.jwt() ->> 'email', '')))
             and i.is_active = true
           order by i.created_at desc
           limit 1
@@ -316,6 +316,25 @@ as $$
         'viewer'
       )
     end
+$$;
+
+create or replace function public.current_investor_profile()
+returns table (
+  id uuid,
+  investment_amount numeric,
+  share_ratio numeric
+)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select i.id, i.investment_amount, i.share_ratio
+  from public.investors i
+  where trim(lower(i.email)) = trim(lower(coalesce(auth.jwt() ->> 'email', '')))
+    and i.is_active = true
+  order by i.created_at desc
+  limit 1
 $$;
 
 create or replace function public.set_updated_at()
@@ -336,6 +355,7 @@ grant usage on schema public to authenticated;
 grant execute on function public.current_profile_role() to authenticated;
 grant execute on function public.current_profile_store_id() to authenticated;
 grant execute on function public.current_investor_permission_role() to authenticated;
+grant execute on function public.current_investor_profile() to authenticated;
 grant select on table public.profiles to authenticated;
 grant select on table public.stores to authenticated;
 grant select, insert, update on table public.store_finance_settings to authenticated;
@@ -418,7 +438,7 @@ create policy "income delete by admin operator"
   to authenticated
   using (
     auth.uid() is not null
-    and public.current_profile_role() in ('admin', 'operator')
+    and public.current_investor_permission_role() in ('admin', 'operator', 'viewer')
     and public.current_profile_store_id() = store_id
   );
 
@@ -568,17 +588,17 @@ create policy "evidence insert by admin operator"
   to authenticated
   with check (
     auth.uid() is not null
-    and public.current_profile_role() in ('admin', 'operator')
+    and public.current_investor_permission_role() in ('admin', 'operator')
     and public.current_profile_store_id() = store_id
     and uploaded_by = auth.uid()
   );
 
-create policy "evidence delete by admin operator"
+create policy "evidence delete by admin"
   on public.evidence_files for delete
   to authenticated
   using (
     auth.uid() is not null
-    and public.current_profile_role() in ('admin', 'operator')
+    and public.current_investor_permission_role() = 'admin'
     and public.current_profile_store_id() = store_id
   );
 
@@ -591,7 +611,7 @@ create policy "evidence storage select by store role"
   to authenticated
   using (
     bucket_id = 'evidence-files'
-    and public.current_profile_role() in ('admin', 'operator')
+    and public.current_investor_permission_role() in ('admin', 'operator', 'viewer')
     and (storage.foldername(name))[1] = public.current_profile_store_id()::text
   );
 
@@ -600,16 +620,16 @@ create policy "evidence storage insert by admin operator"
   to authenticated
   with check (
     bucket_id = 'evidence-files'
-    and public.current_profile_role() in ('admin', 'operator')
+    and public.current_investor_permission_role() in ('admin', 'operator')
     and (storage.foldername(name))[1] = public.current_profile_store_id()::text
   );
 
-create policy "evidence storage delete by admin operator"
+create policy "evidence storage delete by admin"
   on storage.objects for delete
   to authenticated
   using (
     bucket_id = 'evidence-files'
-    and public.current_profile_role() in ('admin', 'operator')
+    and public.current_investor_permission_role() = 'admin'
     and (storage.foldername(name))[1] = public.current_profile_store_id()::text
   );
 
