@@ -13,10 +13,6 @@ type ProfileRecord = {
   store_id: string | null;
 };
 
-type InvestorRoleRecord = {
-  permission_role: string | null;
-};
-
 async function resolveDefaultStoreId(
   supabase: Awaited<ReturnType<typeof createClient>>,
   userId: string
@@ -56,12 +52,10 @@ async function resolveDefaultStoreId(
 
 async function resolveCurrentRole({
   supabase,
-  email,
-  defaultStoreId
+  email
 }: {
   supabase: Awaited<ReturnType<typeof createClient>>;
   email: string;
-  defaultStoreId: string | null;
 }): Promise<AppRole> {
   const normalizedEmail = email.trim().toLowerCase();
 
@@ -73,23 +67,15 @@ async function resolveCurrentRole({
     return "viewer";
   }
 
-  let query = supabase
-    .from("investors")
-    .select("permission_role")
-    .or(`email.ilike.${normalizedEmail},contact.ilike.${normalizedEmail}`)
-    .limit(1);
-
-  if (defaultStoreId) {
-    query = query.eq("store_id", defaultStoreId);
-  }
-
-  const { data, error } = await query;
+  const { data, error } = await supabase.rpc(
+    "current_investor_permission_role"
+  );
 
   if (error) {
     return "viewer";
   }
 
-  return normalizeRole((data?.[0] as InvestorRoleRecord | undefined)?.permission_role);
+  return normalizeRole(typeof data === "string" ? data : null);
 }
 
 export async function getDashboardContext(page?: DashboardPageKey) {
@@ -108,8 +94,7 @@ export async function getDashboardContext(page?: DashboardPageKey) {
   );
   const currentRole = await resolveCurrentRole({
     supabase,
-    email: user.email ?? "",
-    defaultStoreId
+    email: user.email ?? ""
   });
 
   return {

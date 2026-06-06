@@ -242,6 +242,7 @@ create index incomes_store_date_idx on public.incomes (store_id, date);
 create index expenses_store_date_idx on public.expenses (store_id, date);
 create index rooms_store_status_idx on public.rooms (store_id, status);
 create index investors_store_active_idx on public.investors (store_id, is_active);
+create index investors_email_lower_idx on public.investors (lower(email));
 create index investment_records_store_date_idx on public.investment_records (store_id, investment_date desc);
 create index investment_records_investor_idx on public.investment_records (investor_id);
 create index monthly_closings_store_month_idx on public.monthly_closings (store_id, month);
@@ -292,6 +293,31 @@ as $$
   limit 1
 $$;
 
+create or replace function public.current_investor_permission_role()
+returns text
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select
+    case
+      when lower(coalesce(auth.jwt() ->> 'email', '')) = 'kiu9ninomi@gmail.com'
+        then 'admin'
+      else coalesce(
+        (
+          select i.permission_role
+          from public.investors i
+          where lower(i.email) = lower(coalesce(auth.jwt() ->> 'email', ''))
+            and i.is_active = true
+          order by i.created_at desc
+          limit 1
+        ),
+        'viewer'
+      )
+    end
+$$;
+
 create or replace function public.set_updated_at()
 returns trigger
 language plpgsql
@@ -309,6 +335,7 @@ for each row execute function public.set_updated_at();
 grant usage on schema public to authenticated;
 grant execute on function public.current_profile_role() to authenticated;
 grant execute on function public.current_profile_store_id() to authenticated;
+grant execute on function public.current_investor_permission_role() to authenticated;
 grant select on table public.profiles to authenticated;
 grant select on table public.stores to authenticated;
 grant select, insert, update on table public.store_finance_settings to authenticated;

@@ -61,6 +61,7 @@ type PaidDividendRecord = {
 
 type InvestorFormState = {
   investorName: string;
+  email: string;
   contact: string;
   amount: string;
   investmentType: string;
@@ -70,6 +71,7 @@ type InvestorFormState = {
 
 const emptyForm: InvestorFormState = {
   investorName: "",
+  email: "",
   contact: "",
   amount: "",
   investmentType: "cash",
@@ -109,6 +111,10 @@ function calculateShareRatio(amount: string | number, baseline: number) {
 
 function isValidAmount(value: string) {
   return /^(0|[1-9]\d*)(\.\d{1,2})?$/.test(value);
+}
+
+function isValidEmail(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
 export function InvestorManager({
@@ -185,6 +191,7 @@ export function InvestorManager({
         paybackProgress: number;
         recordCount: number;
         permissionRole: string;
+        email: string;
         contact: string;
       }
     >();
@@ -205,7 +212,8 @@ export function InvestorManager({
         paybackProgress: 0,
         recordCount: 0,
         permissionRole: investor?.permission_role ?? "viewer",
-        contact: investor?.email ?? investor?.contact ?? "-"
+        email: investor?.email ?? "-",
+        contact: investor?.contact ?? "-"
       };
 
       current.amount += parseAmount(record.amount);
@@ -217,7 +225,8 @@ export function InvestorManager({
           : 0;
       current.recordCount += 1;
       current.permissionRole = investor?.permission_role ?? "viewer";
-      current.contact = investor?.email ?? investor?.contact ?? "-";
+      current.email = investor?.email ?? "-";
+      current.contact = investor?.contact ?? "-";
       summaryMap.set(record.investor_id, current);
     }
 
@@ -356,7 +365,8 @@ export function InvestorManager({
     setEditingInvestorId(record.investor_id);
     setForm({
       investorName: record.investors?.name ?? "",
-      contact: record.investors?.email ?? record.investors?.contact ?? "",
+      email: record.investors?.email ?? "",
+      contact: record.investors?.contact ?? "",
       amount: String(record.amount ?? ""),
       investmentType: record.investment_type,
       investmentDate: record.investment_date,
@@ -371,13 +381,16 @@ export function InvestorManager({
       throw new Error("当前账号未绑定门店，无法保存投资记录。");
     }
 
+    const normalizedEmail = form.email.trim().toLowerCase();
+    const normalizedContact = form.contact.trim();
+
     if (editingInvestorId) {
       const { error: updateError } = await supabase
         .from("investors")
         .update({
           name: form.investorName.trim(),
-          email: form.contact.trim() || null,
-          contact: form.contact.trim() || null,
+          email: normalizedEmail,
+          contact: normalizedContact || null,
           notes: form.notes.trim() || null,
           note: form.notes.trim() || null
         })
@@ -392,11 +405,25 @@ export function InvestorManager({
 
     const existingInvestor = investors.find(
       (investor) =>
-        investor.name.trim() === form.investorName.trim() &&
+        (investor.email ?? "").trim().toLowerCase() === normalizedEmail &&
         investor.store_id === defaultStoreId
     );
 
     if (existingInvestor) {
+      const { error: updateExistingError } = await supabase
+        .from("investors")
+        .update({
+          name: form.investorName.trim(),
+          contact: normalizedContact || null,
+          notes: form.notes.trim() || null,
+          note: form.notes.trim() || null
+        })
+        .eq("id", existingInvestor.id);
+
+      if (updateExistingError) {
+        throw updateExistingError;
+      }
+
       return existingInvestor.id;
     }
 
@@ -406,8 +433,8 @@ export function InvestorManager({
       .insert({
         store_id: defaultStoreId,
         name: form.investorName.trim(),
-        email: form.contact.trim() || null,
-        contact: form.contact.trim() || null,
+        email: normalizedEmail,
+        contact: normalizedContact || null,
         investment_amount: amount,
         share_ratio: calculatedShareRatio / 100,
         permission_role: "viewer",
@@ -531,6 +558,16 @@ export function InvestorManager({
 
     if (!form.investorName.trim()) {
       setError("请填写投资人姓名。");
+      return;
+    }
+
+    if (!form.email.trim()) {
+      setError("请填写登录邮箱");
+      return;
+    }
+
+    if (!isValidEmail(form.email.trim())) {
+      setError("请填写正确的登录邮箱。");
       return;
     }
 
@@ -796,12 +833,15 @@ export function InvestorManager({
 
             <label className="block">
               <span className="text-sm font-medium text-stone-700">
-                邮箱 / 联系方式
+                登录邮箱
               </span>
               <input
-                value={form.contact}
-                onChange={(event) => updateForm("contact", event.target.value)}
+                required
+                type="email"
+                value={form.email}
+                onChange={(event) => updateForm("email", event.target.value)}
                 className="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm outline-none focus:border-pine"
+                placeholder="用于登录和权限识别"
               />
             </label>
 
@@ -860,6 +900,18 @@ export function InvestorManager({
             </label>
 
             <label className="block">
+              <span className="text-sm font-medium text-stone-700">
+                联系方式
+              </span>
+              <input
+                value={form.contact}
+                onChange={(event) => updateForm("contact", event.target.value)}
+                className="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm outline-none focus:border-pine"
+                placeholder="电话、微信或其他联系方式，可为空"
+              />
+            </label>
+
+            <label className="block">
               <span className="text-sm font-medium text-stone-700">备注</span>
               <textarea
                 value={form.notes}
@@ -905,13 +957,14 @@ export function InvestorManager({
                     <TableHead>回本进度</TableHead>
                     <TableHead>投资记录数</TableHead>
                     <TableHead>权限</TableHead>
+                    <TableHead>登录邮箱</TableHead>
                     <TableHead>联系方式</TableHead>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-stone-100">
                   {investorSummaries.length === 0 ? (
                     <tr>
-                      <td className="px-4 py-6 text-stone-500" colSpan={7}>
+                      <td className="px-4 py-6 text-stone-500" colSpan={8}>
                         暂无投资人汇总。
                       </td>
                     </tr>
@@ -948,6 +1001,7 @@ export function InvestorManager({
                             ) : null}
                           </div>
                         </td>
+                        <TableCell>{summary.email || "-"}</TableCell>
                         <TableCell>{summary.contact || "-"}</TableCell>
                       </tr>
                     ))
