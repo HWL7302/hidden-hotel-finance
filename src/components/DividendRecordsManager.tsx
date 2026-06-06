@@ -5,6 +5,7 @@ import { DateInput } from "@/components/DateInputs";
 import { MonthToolbar } from "@/components/MonthToolbar";
 import { createClient } from "@/lib/supabase-client";
 import { isMonthlyClosingPermissionError } from "@/lib/month-lock";
+import { canPerform, type AppRole } from "@/lib/permissions";
 
 type IncomeRecord = {
   net_amount: string | number;
@@ -106,13 +107,23 @@ function todayValue() {
 }
 
 export function DividendRecordsManager({
+  currentRole,
   defaultStoreId,
   storeLoadError
 }: {
+  currentRole: AppRole;
   defaultStoreId: string | null;
   storeLoadError: string;
 }) {
   const supabase = useMemo(() => createClient(), []);
+  const canGenerateDividends = canPerform(currentRole, "generateDividends");
+  const canRefreshDividends = canPerform(currentRole, "refreshDividends");
+  const canEditDividends = canPerform(currentRole, "editDividends");
+  const canMarkDividendsPaid = canPerform(currentRole, "markDividendsPaid");
+  const canMarkDividendsDeferred = canPerform(
+    currentRole,
+    "markDividendsDeferred"
+  );
   const [month, setMonth] = useState(currentMonthValue);
   const [incomes, setIncomes] = useState<IncomeRecord[]>([]);
   const [expenses, setExpenses] = useState<ExpenseRecord[]>([]);
@@ -281,6 +292,11 @@ export function DividendRecordsManager({
     setError("");
     setNotice("");
 
+    if (!canGenerateDividends) {
+      setError("当前账号无权生成分红记录。");
+      return;
+    }
+
     if (isMonthLocked) {
       setError("当前月份已锁定，不能重新生成当月分红记录。");
       return;
@@ -344,6 +360,11 @@ export function DividendRecordsManager({
   }
 
   function startEdit(record: DividendRecord) {
+    if (!canEditDividends) {
+      setError("当前账号无权编辑分红记录。");
+      return;
+    }
+
     setEditingRecord(record);
     setEditForm({
       paidAmount: String(record.paid_amount ?? ""),
@@ -371,6 +392,11 @@ export function DividendRecordsManager({
   ) {
     setError("");
     setNotice("");
+
+    if (!canEditDividends) {
+      setError("当前账号无权编辑分红记录。");
+      return false;
+    }
 
     const nextPaidAmount = parseAmount(updates.paid_amount ?? record.paid_amount);
     const expectedAmount = parseAmount(record.expected_amount);
@@ -426,6 +452,11 @@ export function DividendRecordsManager({
   }
 
   async function markPaid(record: DividendRecord) {
+    if (!canMarkDividendsPaid) {
+      setError("当前账号无权标记分红为已发放。");
+      return;
+    }
+
     await saveRecord(record, {
       status: "paid",
       paid_amount: record.paid_amount || record.expected_amount,
@@ -435,6 +466,11 @@ export function DividendRecordsManager({
   }
 
   async function markDeferred(record: DividendRecord) {
+    if (!canMarkDividendsDeferred) {
+      setError("当前账号无权标记分红为暂缓发放。");
+      return;
+    }
+
     await saveRecord(record, {
       status: "deferred",
       paid_date: null,
@@ -443,6 +479,19 @@ export function DividendRecordsManager({
   }
 
   async function handleDelete(record: DividendRecord) {
+    if (
+      !canPerform(currentRole, "deleteDividendRecord", {
+        dividendStatus: record.status
+      })
+    ) {
+      setError(
+        record.status === "paid"
+          ? "当前账号无权删除已发放分红记录。"
+          : "当前账号无权删除分红记录。"
+      );
+      return;
+    }
+
     const confirmed = window.confirm(
       `确认删除 ${record.investor_name} 在 ${month} 的分红记录吗？`
     );
@@ -475,6 +524,11 @@ export function DividendRecordsManager({
 
     setError("");
     setNotice("");
+
+    if (!canRefreshDividends) {
+      setError("当前账号无权刷新分红数据。");
+      return;
+    }
 
     const range = getMonthRange(month);
     setIsRefreshing(true);
@@ -630,18 +684,20 @@ export function DividendRecordsManager({
           month={month}
           onMonthChange={setMonth}
           action={
-            <button
-              type="button"
-              onClick={() => void handleGenerate()}
-              disabled={isGenerating || isLoading || isMonthLocked}
-              className="rounded-lg bg-pine px-4 py-2 text-sm font-semibold text-white transition hover:bg-slateblue disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {isMonthLocked
-                ? "月份已锁定"
-                : isGenerating
-                  ? "生成中..."
-                  : "生成本月分红记录"}
-            </button>
+            canGenerateDividends ? (
+              <button
+                type="button"
+                onClick={() => void handleGenerate()}
+                disabled={isGenerating || isLoading || isMonthLocked}
+                className="rounded-lg bg-pine px-4 py-2 text-sm font-semibold text-white transition hover:bg-slateblue disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isMonthLocked
+                  ? "月份已锁定"
+                  : isGenerating
+                    ? "生成中..."
+                    : "生成本月分红记录"}
+              </button>
+            ) : null
           }
         />
       </div>
@@ -681,14 +737,16 @@ export function DividendRecordsManager({
       <div className="mt-6 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
         <div className="flex items-center justify-between gap-4 border-b border-stone-200 px-5 py-4">
           <h3 className="text-lg font-semibold text-ink">本月分红明细</h3>
-          <button
-            type="button"
-            onClick={() => void handleRefreshDividends()}
-            disabled={isRefreshing || isLoading}
-            className="rounded-md border border-stone-300 px-3 py-2 text-sm font-medium text-ink transition hover:border-pine hover:text-pine disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {isRefreshing ? "刷新中..." : "刷新"}
-          </button>
+          {canRefreshDividends ? (
+            <button
+              type="button"
+              onClick={() => void handleRefreshDividends()}
+              disabled={isRefreshing || isLoading}
+              className="rounded-md border border-stone-300 px-3 py-2 text-sm font-medium text-ink transition hover:border-pine hover:text-pine disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isRefreshing ? "刷新中..." : "刷新"}
+            </button>
+          ) : null}
         </div>
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-stone-200 text-sm">
@@ -737,34 +795,52 @@ export function DividendRecordsManager({
                     </td>
                     <td className="whitespace-nowrap px-4 py-3 text-stone-700">
                       <div className="flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          onClick={() => startEdit(record)}
-                          className="font-medium text-pine hover:underline"
-                        >
-                          编辑
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => void markPaid(record)}
-                          className="font-medium text-emerald-700 hover:underline"
-                        >
-                          标记已发放
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => void markDeferred(record)}
-                          className="font-medium text-amber-700 hover:underline"
-                        >
-                          标记暂缓
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => void handleDelete(record)}
-                          className="font-medium text-red-700 hover:underline"
-                        >
-                          删除
-                        </button>
+                        {canEditDividends ? (
+                          <button
+                            type="button"
+                            onClick={() => startEdit(record)}
+                            className="font-medium text-pine hover:underline"
+                          >
+                            编辑
+                          </button>
+                        ) : null}
+                        {canMarkDividendsPaid ? (
+                          <button
+                            type="button"
+                            onClick={() => void markPaid(record)}
+                            className="font-medium text-emerald-700 hover:underline"
+                          >
+                            标记已发放
+                          </button>
+                        ) : null}
+                        {canMarkDividendsDeferred ? (
+                          <button
+                            type="button"
+                            onClick={() => void markDeferred(record)}
+                            className="font-medium text-amber-700 hover:underline"
+                          >
+                            标记暂缓
+                          </button>
+                        ) : null}
+                        {canPerform(currentRole, "deleteDividendRecord", {
+                          dividendStatus: record.status
+                        }) ? (
+                          <button
+                            type="button"
+                            onClick={() => void handleDelete(record)}
+                            className="font-medium text-red-700 hover:underline"
+                          >
+                            删除
+                          </button>
+                        ) : null}
+                        {!canEditDividends &&
+                        !canMarkDividendsPaid &&
+                        !canMarkDividendsDeferred &&
+                        !canPerform(currentRole, "deleteDividendRecord", {
+                          dividendStatus: record.status
+                        }) ? (
+                          <span className="text-stone-400">-</span>
+                        ) : null}
                       </div>
                     </td>
                   </tr>

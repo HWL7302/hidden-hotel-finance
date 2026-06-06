@@ -99,7 +99,7 @@ create table public.investors (
   email text,
   contact text,
   permission_role text not null default 'viewer' check (
-    permission_role in ('viewer', 'operator', 'admin')
+    permission_role in ('viewer', 'operator', 'manager', 'admin')
   ),
   user_id uuid references auth.users(id),
   investment_amount numeric not null default 0 check (investment_amount >= 0),

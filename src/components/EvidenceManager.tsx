@@ -5,6 +5,7 @@ import Link from "next/link";
 import { MonthInput } from "@/components/DateInputs";
 import { createSignedEvidenceUrl } from "@/lib/evidence-client";
 import { createClient } from "@/lib/supabase-client";
+import { canPerform, type AppRole } from "@/lib/permissions";
 
 type EvidenceType = "income" | "expense" | "other";
 type EvidenceFilter = "all" | EvidenceType;
@@ -66,12 +67,12 @@ export function EvidenceManager({
   defaultStoreId,
   storeLoadError
 }: {
-  currentRole: string;
+  currentRole: AppRole;
   defaultStoreId: string | null;
   storeLoadError: string;
 }) {
   const supabase = useMemo(() => createClient(), []);
-  const canManage = currentRole === "admin" || currentRole === "operator";
+  const canManage = canPerform(currentRole, "deleteEvidence");
   const [records, setRecords] = useState<EvidenceRecord[]>([]);
   const [month, setMonth] = useState(getCurrentMonth);
   const [typeFilter, setTypeFilter] = useState<EvidenceFilter>("all");

@@ -1,6 +1,14 @@
+import { AccessDenied } from "@/components/AccessDenied";
 import { ModulePlaceholder } from "@/components/ModulePlaceholder";
+import { getDashboardContext } from "@/lib/dashboard-context";
 
-export default function AuditLogsPage() {
+export default async function AuditLogsPage() {
+  const context = await getDashboardContext("auditLogs");
+
+  if (context.accessDenied) {
+    return <AccessDenied />;
+  }
+
   return (
     <ModulePlaceholder
       title="审计日志"

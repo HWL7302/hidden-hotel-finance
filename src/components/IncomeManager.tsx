@@ -14,6 +14,7 @@ import {
   getIncomeSourceLabel,
   incomeSourceOptions
 } from "@/lib/finance-options";
+import { canPerform, type AppRole } from "@/lib/permissions";
 
 type IncomeRecord = {
   id: string;
@@ -121,14 +122,17 @@ function calculateNetAmount(grossAmount: string, feeAmount: string) {
 
 export function IncomeManager({
   currentUserId,
+  currentRole,
   defaultStoreId,
   storeLoadError
 }: {
   currentUserId: string;
+  currentRole: AppRole;
   defaultStoreId: string | null;
   storeLoadError: string;
 }) {
   const supabase = useMemo(() => createClient(), []);
+  const canManageIncome = canPerform(currentRole, "manageIncome");
   const searchParams = useSearchParams();
   const initialMonth = searchParams.get("month") ?? currentMonthValue();
   const initialHighlightedId = searchParams.get("highlight");
@@ -271,6 +275,11 @@ export function IncomeManager({
       return;
     }
 
+    if (!canManageIncome) {
+      setError("当前账号无权编辑收入记录。");
+      return;
+    }
+
     setEditingId(income.id);
     setForm({
       date: income.date,
@@ -302,6 +311,11 @@ export function IncomeManager({
 
     if (isMonthLocked) {
       setError("当前月份已锁定，不能新增或修改收入记录。");
+      return;
+    }
+
+    if (!canManageIncome) {
+      setError("当前账号无权新增或修改收入记录。");
       return;
     }
 
@@ -405,6 +419,11 @@ export function IncomeManager({
   async function handleDelete(income: IncomeRecord) {
     if (isMonthLocked) {
       setError("当前月份已锁定，不能删除收入记录。");
+      return;
+    }
+
+    if (!canManageIncome) {
+      setError("当前账号无权删除收入记录。");
       return;
     }
 
@@ -594,7 +613,7 @@ export function IncomeManager({
           <div className="mt-5 flex gap-3">
             <button
               type="submit"
-              disabled={isSaving || isMonthLocked}
+              disabled={isSaving || isMonthLocked || !canManageIncome}
               className="rounded-md bg-pine px-4 py-2 text-sm font-semibold text-white transition hover:bg-slateblue disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isMonthLocked
@@ -717,22 +736,28 @@ export function IncomeManager({
                       </td>
                       <td className="whitespace-nowrap px-4 py-3">
                         <div className="flex gap-2">
-                          <button
-                            type="button"
-                            onClick={() => startEdit(income)}
-                            disabled={isMonthLocked}
-                            className="rounded-md border border-stone-300 px-3 py-1.5 text-xs font-medium text-ink transition hover:border-pine hover:text-pine"
-                          >
-                            编辑
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => void handleDelete(income)}
-                            disabled={isMonthLocked}
-                            className="rounded-md border border-red-200 px-3 py-1.5 text-xs font-medium text-red-700 transition hover:bg-red-50"
-                          >
-                            删除
-                          </button>
+                          {canManageIncome ? (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => startEdit(income)}
+                                disabled={isMonthLocked}
+                                className="rounded-md border border-stone-300 px-3 py-1.5 text-xs font-medium text-ink transition hover:border-pine hover:text-pine"
+                              >
+                                编辑
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => void handleDelete(income)}
+                                disabled={isMonthLocked}
+                                className="rounded-md border border-red-200 px-3 py-1.5 text-xs font-medium text-red-700 transition hover:bg-red-50"
+                              >
+                                删除
+                              </button>
+                            </>
+                          ) : (
+                            <span className="text-stone-400">-</span>
+                          )}
                         </div>
                       </td>
                     </tr>

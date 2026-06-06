@@ -1,48 +1,19 @@
+import { AccessDenied } from "@/components/AccessDenied";
 import { MonthlyClosingManager } from "@/components/MonthlyClosingManager";
-import { createClient } from "@/lib/supabase-server";
+import { getDashboardContext } from "@/lib/dashboard-context";
 
 export default async function MonthlyClosingPage() {
-  const supabase = await createClient();
-  const {
-    data: { user }
-  } = await supabase.auth.getUser();
+  const context = await getDashboardContext("monthlyClosing");
 
-  let defaultStoreId: string | null = null;
-  let storeLoadError = "";
-
-  if (user) {
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("store_id")
-      .eq("id", user.id)
-      .maybeSingle();
-
-    if (profileError) {
-      storeLoadError = profileError.message;
-    }
-
-    defaultStoreId = profile?.store_id ?? null;
-
-    if (!defaultStoreId) {
-      const { data: stores, error: storesError } = await supabase
-        .from("stores")
-        .select("id")
-        .eq("is_active", true)
-        .order("created_at", { ascending: true })
-        .limit(1);
-
-      if (storesError) {
-        storeLoadError = storesError.message;
-      }
-
-      defaultStoreId = stores?.[0]?.id ?? null;
-    }
+  if (context.accessDenied) {
+    return <AccessDenied />;
   }
 
   return (
     <MonthlyClosingManager
-      defaultStoreId={defaultStoreId}
-      storeLoadError={storeLoadError}
+      currentRole={context.currentRole}
+      defaultStoreId={context.defaultStoreId}
+      storeLoadError={context.storeLoadError}
     />
   );
 }

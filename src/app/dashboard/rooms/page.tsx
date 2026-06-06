@@ -1,6 +1,14 @@
+import { AccessDenied } from "@/components/AccessDenied";
 import { ModulePlaceholder } from "@/components/ModulePlaceholder";
+import { getDashboardContext } from "@/lib/dashboard-context";
 
-export default function RoomsPage() {
+export default async function RoomsPage() {
+  const context = await getDashboardContext("rooms");
+
+  if (context.accessDenied) {
+    return <AccessDenied />;
+  }
+
   return (
     <ModulePlaceholder
       title="房间/月租"

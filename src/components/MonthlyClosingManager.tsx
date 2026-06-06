@@ -10,6 +10,7 @@ import {
 import { MonthToolbar } from "@/components/MonthToolbar";
 import { createClient } from "@/lib/supabase-client";
 import { isMonthlyClosingPermissionError } from "@/lib/month-lock";
+import { canPerform, type AppRole } from "@/lib/permissions";
 
 type IncomeRecord = {
   source: string;
@@ -116,13 +117,16 @@ function createExpenseSummaryMap() {
 }
 
 export function MonthlyClosingManager({
+  currentRole,
   defaultStoreId,
   storeLoadError
 }: {
+  currentRole: AppRole;
   defaultStoreId: string | null;
   storeLoadError: string;
 }) {
   const supabase = useMemo(() => createClient(), []);
+  const canToggleMonthLock = canPerform(currentRole, "toggleMonthLock");
   const [month, setMonth] = useState(currentMonthValue);
   const [incomes, setIncomes] = useState<IncomeRecord[]>([]);
   const [expenses, setExpenses] = useState<ExpenseRecord[]>([]);
@@ -280,6 +284,11 @@ export function MonthlyClosingManager({
       return;
     }
 
+    if (!canToggleMonthLock) {
+      setError("当前账号无权锁定或解锁月份。");
+      return;
+    }
+
     const nextLocked = !isMonthLocked;
 
     if (nextLocked) {
@@ -345,20 +354,22 @@ export function MonthlyClosingManager({
                     ? "已锁定"
                     : "未锁定"}
               </span>
-              <button
-                type="button"
-                onClick={() => void handleToggleMonthLock()}
-                disabled={isLockSaving || isLoading || isMonthLockPermissionMissing}
-                className="rounded-lg bg-pine px-4 py-2 text-sm font-semibold text-white transition hover:bg-slateblue disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {isMonthLockPermissionMissing
-                  ? "等待授权"
-                  : isLockSaving
-                    ? "保存中..."
-                    : isMonthLocked
-                      ? "解锁当前月份"
-                      : "锁定当前月份"}
-              </button>
+              {canToggleMonthLock ? (
+                <button
+                  type="button"
+                  onClick={() => void handleToggleMonthLock()}
+                  disabled={isLockSaving || isLoading || isMonthLockPermissionMissing}
+                  className="rounded-lg bg-pine px-4 py-2 text-sm font-semibold text-white transition hover:bg-slateblue disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isMonthLockPermissionMissing
+                    ? "等待授权"
+                    : isLockSaving
+                      ? "保存中..."
+                      : isMonthLocked
+                        ? "解锁当前月份"
+                        : "锁定当前月份"}
+                </button>
+              ) : null}
             </div>
           }
         />

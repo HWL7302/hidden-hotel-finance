@@ -7,6 +7,13 @@ import {
   getInvestmentTypeLabel,
   investmentTypeOptions
 } from "@/lib/finance-options";
+import {
+  canPerform,
+  getRoleLabel,
+  normalizeRole,
+  roleOptions,
+  type AppRole
+} from "@/lib/permissions";
 
 type InvestorRecord = {
   id: string;
@@ -83,16 +90,6 @@ function formatPercent(value: number) {
   return `${value.toFixed(2)}%`;
 }
 
-function getPermissionRoleLabel(value: string | null | undefined) {
-  const labels: Record<string, string> = {
-    viewer: "仅查看",
-    operator: "经营方",
-    admin: "管理员"
-  };
-
-  return labels[value ?? "viewer"] ?? "仅查看";
-}
-
 function parseAmount(value: string | number | null) {
   if (value === null || value === "") {
     return 0;
@@ -119,11 +116,21 @@ export function InvestorManager({
   defaultStoreId,
   storeLoadError
 }: {
-  currentRole: string;
+  currentRole: AppRole;
   defaultStoreId: string | null;
   storeLoadError: string;
 }) {
   const supabase = useMemo(() => createClient(), []);
+  const normalizedCurrentRole = currentRole;
+  const canManageInvestors = canPerform(normalizedCurrentRole, "manageInvestors");
+  const canManageInvestorPermissions = canPerform(
+    normalizedCurrentRole,
+    "manageInvestorPermissions"
+  );
+  const canManageInvestmentBaseline = canPerform(
+    normalizedCurrentRole,
+    "manageInvestmentBaseline"
+  );
   const [investors, setInvestors] = useState<InvestorRecord[]>([]);
   const [records, setRecords] = useState<InvestmentRecord[]>([]);
   const [paidDividendRecords, setPaidDividendRecords] = useState<
@@ -470,6 +477,11 @@ export function InvestorManager({
     setError("");
     setNotice("");
 
+    if (!canManageInvestmentBaseline) {
+      setError("当前账号无权修改项目总投资基准。");
+      return;
+    }
+
     if (!defaultStoreId) {
       setError("当前账号未绑定门店，无法保存项目总投资基准。");
       return;
@@ -512,7 +524,7 @@ export function InvestorManager({
     setError("");
     setNotice("");
 
-    if (currentRole && currentRole !== "admin") {
+    if (!canManageInvestors) {
       setError("当前页面第一版仅用于管理员维护投资人数据。");
       return;
     }
@@ -580,6 +592,11 @@ export function InvestorManager({
   }
 
   async function handleDelete(record: InvestmentRecord) {
+    if (!canManageInvestors) {
+      setError("当前账号无权删除投资记录。");
+      return;
+    }
+
     const confirmed = window.confirm(
       `确认删除 ${record.investors?.name ?? "该投资人"} 的这条投资记录吗？`
     );
@@ -616,10 +633,27 @@ export function InvestorManager({
     await loadInvestors();
   }
 
-  function handlePermissionClick() {
-    window.alert(
-      "权限功能预留中，后续将支持按角色控制可查看内容和可操作功能。"
-    );
+  async function handlePermissionRoleChange(investorId: string, role: AppRole) {
+    if (!canManageInvestorPermissions) {
+      setError("当前账号无权修改投资人权限。");
+      return;
+    }
+
+    setError("");
+    setNotice("");
+
+    const { error: updateError } = await supabase
+      .from("investors")
+      .update({ permission_role: role })
+      .eq("id", investorId);
+
+    if (updateError) {
+      setError(updateError.message);
+      return;
+    }
+
+    setNotice("投资人权限已更新。");
+    await loadInvestors();
   }
 
   return (
@@ -633,16 +667,18 @@ export function InvestorManager({
           title="项目总投资基准"
           value={baselineAmount === null ? "未设置" : formatMoney(baselineAmount)}
           action={
-            <button
-              type="button"
-              onClick={() => {
-                setBaselineInput(String(Math.round(effectiveBaseline || 420000)));
-                setIsBaselineModalOpen(true);
-              }}
-              className="rounded-md border border-pine/30 px-3 py-1.5 text-xs font-semibold text-slateblue transition hover:bg-pine/10"
-            >
-              修改
-            </button>
+            canManageInvestmentBaseline ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setBaselineInput(String(Math.round(effectiveBaseline || 420000)));
+                  setIsBaselineModalOpen(true);
+                }}
+                className="rounded-md border border-pine/30 px-3 py-1.5 text-xs font-semibold text-slateblue transition hover:bg-pine/10"
+              >
+                修改
+              </button>
+            ) : null
           }
         />
         <SummaryCard
@@ -720,8 +756,13 @@ export function InvestorManager({
         </div>
       ) : null}
 
-      <div className="mt-6 grid gap-6 xl:grid-cols-[420px_1fr]">
-        <form
+      <div
+        className={`mt-6 grid gap-6 ${
+          canManageInvestors ? "xl:grid-cols-[420px_1fr]" : ""
+        }`}
+      >
+        {canManageInvestors ? (
+          <form
           onSubmit={handleSubmit}
           className="rounded-xl border border-slate-200 bg-white p-5 shadow-[0_8px_24px_rgba(15,23,42,0.04)]"
         >
@@ -846,7 +887,8 @@ export function InvestorManager({
               {isSaving ? "保存中..." : editingRecordId ? "保存修改" : "新增投资记录"}
             </button>
           </div>
-        </form>
+          </form>
+        ) : null}
 
         <div className="space-y-6">
           <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
@@ -883,14 +925,27 @@ export function InvestorManager({
                         <TableCell>{summary.recordCount}</TableCell>
                         <td className="px-4 py-3 text-stone-700">
                           <div className="flex flex-col gap-1">
-                            <span>{getPermissionRoleLabel(summary.permissionRole)}</span>
-                            <button
-                              type="button"
-                              onClick={handlePermissionClick}
-                              className="w-fit text-sm font-medium text-pine hover:underline"
-                            >
-                              修改权限
-                            </button>
+                            <span>
+                              {getRoleLabel(normalizeRole(summary.permissionRole))}
+                            </span>
+                            {canManageInvestorPermissions ? (
+                              <select
+                                value={normalizeRole(summary.permissionRole)}
+                                onChange={(event) =>
+                                  void handlePermissionRoleChange(
+                                    summary.id,
+                                    event.target.value as AppRole
+                                  )
+                                }
+                                className="w-fit rounded-md border border-stone-300 bg-white px-2 py-1 text-xs outline-none focus:border-pine"
+                              >
+                                {roleOptions.map((option) => (
+                                  <option key={option.value} value={option.value}>
+                                    {option.label}
+                                  </option>
+                                ))}
+                              </select>
+                            ) : null}
                           </div>
                         </td>
                         <TableCell>{summary.contact || "-"}</TableCell>
@@ -955,22 +1010,26 @@ export function InvestorManager({
                           </div>
                         </td>
                         <TableCell>
-                          <div className="flex gap-2">
-                            <button
-                              type="button"
-                              onClick={() => startEdit(record)}
-                              className="text-sm font-medium text-pine hover:underline"
-                            >
-                              编辑
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => void handleDelete(record)}
-                              className="text-sm font-medium text-red-700 hover:underline"
-                            >
-                              删除
-                            </button>
-                          </div>
+                          {canManageInvestors ? (
+                            <div className="flex gap-2">
+                              <button
+                                type="button"
+                                onClick={() => startEdit(record)}
+                                className="text-sm font-medium text-pine hover:underline"
+                              >
+                                编辑
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => void handleDelete(record)}
+                                className="text-sm font-medium text-red-700 hover:underline"
+                              >
+                                删除
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="text-stone-400">-</span>
+                          )}
                         </TableCell>
                       </tr>
                     ))

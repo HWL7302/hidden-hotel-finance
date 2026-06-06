@@ -15,6 +15,7 @@ import {
   getExpenseCategoryLabel,
   paymentMethodOptions
 } from "@/lib/finance-options";
+import { canPerform, type AppRole } from "@/lib/permissions";
 
 type ExpenseRecord = {
   id: string;
@@ -99,14 +100,17 @@ function validateAmount(value: string) {
 
 export function ExpenseManager({
   currentUserId,
+  currentRole,
   defaultStoreId,
   storeLoadError
 }: {
   currentUserId: string;
+  currentRole: AppRole;
   defaultStoreId: string | null;
   storeLoadError: string;
 }) {
   const supabase = useMemo(() => createClient(), []);
+  const canManageExpenses = canPerform(currentRole, "manageExpenses");
   const searchParams = useSearchParams();
   const initialMonth = searchParams.get("month") ?? currentMonthValue();
   const initialHighlightedId = searchParams.get("highlight");
@@ -232,6 +236,11 @@ export function ExpenseManager({
       return;
     }
 
+    if (!canManageExpenses) {
+      setError("当前账号无权编辑支出记录。");
+      return;
+    }
+
     setEditingId(expense.id);
     setIsPayeeManuallyEdited(Boolean(expense.payee));
     setForm({
@@ -279,6 +288,11 @@ export function ExpenseManager({
 
     if (isMonthLocked) {
       setError("当前月份已锁定，不能新增或修改支出记录。");
+      return;
+    }
+
+    if (!canManageExpenses) {
+      setError("当前账号无权新增或修改支出记录。");
       return;
     }
 
@@ -356,6 +370,11 @@ export function ExpenseManager({
   async function handleDelete(expense: ExpenseRecord) {
     if (isMonthLocked) {
       setError("当前月份已锁定，不能删除支出记录。");
+      return;
+    }
+
+    if (!canManageExpenses) {
+      setError("当前账号无权删除支出记录。");
       return;
     }
 
@@ -547,7 +566,7 @@ export function ExpenseManager({
           <div className="mt-5 flex gap-3">
             <button
               type="submit"
-              disabled={isSaving || isMonthLocked}
+              disabled={isSaving || isMonthLocked || !canManageExpenses}
               className="rounded-md bg-pine px-4 py-2 text-sm font-semibold text-white transition hover:bg-slateblue disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isMonthLocked
@@ -670,22 +689,28 @@ export function ExpenseManager({
                       </td>
                       <td className="whitespace-nowrap px-4 py-3">
                         <div className="flex gap-2">
-                          <button
-                            type="button"
-                            onClick={() => startEdit(expense)}
-                            disabled={isMonthLocked}
-                            className="rounded-md border border-stone-300 px-3 py-1.5 text-xs font-medium text-ink transition hover:border-pine hover:text-pine"
-                          >
-                            编辑
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => void handleDelete(expense)}
-                            disabled={isMonthLocked}
-                            className="rounded-md border border-red-200 px-3 py-1.5 text-xs font-medium text-red-700 transition hover:bg-red-50"
-                          >
-                            删除
-                          </button>
+                          {canManageExpenses ? (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => startEdit(expense)}
+                                disabled={isMonthLocked}
+                                className="rounded-md border border-stone-300 px-3 py-1.5 text-xs font-medium text-ink transition hover:border-pine hover:text-pine"
+                              >
+                                编辑
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => void handleDelete(expense)}
+                                disabled={isMonthLocked}
+                                className="rounded-md border border-red-200 px-3 py-1.5 text-xs font-medium text-red-700 transition hover:bg-red-50"
+                              >
+                                删除
+                              </button>
+                            </>
+                          ) : (
+                            <span className="text-stone-400">-</span>
+                          )}
                         </div>
                       </td>
                     </tr>

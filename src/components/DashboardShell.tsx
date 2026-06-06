@@ -3,28 +3,24 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { SignOutButton } from "@/components/SignOutButton";
-
-const navigationItems = [
-  { href: "/dashboard", label: "首页" },
-  { href: "/dashboard/income", label: "收入管理" },
-  { href: "/dashboard/expenses", label: "支出管理" },
-  { href: "/dashboard/rooms", label: "房间/月租" },
-  { href: "/dashboard/monthly-closing", label: "月度结算" },
-  { href: "/dashboard/investors", label: "投资人管理" },
-  { href: "/dashboard/dividends", label: "分红记录" },
-  { href: "/dashboard/evidence", label: "凭证中心" },
-  { href: "/dashboard/reports", label: "导出报表" },
-  { href: "/dashboard/audit-logs", label: "审计日志" }
-];
+import {
+  getNavigationItemsForRole,
+  type AppRole
+} from "@/lib/permissions";
 
 export function DashboardShell({
   userEmail,
+  currentRole,
+  currentRoleLabel,
   children
 }: {
   userEmail: string;
+  currentRole: AppRole;
+  currentRoleLabel: string;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const navigationItems = getNavigationItemsForRole(currentRole);
 
   function isActive(href: string) {
     if (href === "/dashboard") {
@@ -69,6 +65,9 @@ export function DashboardShell({
             <div>
               <p className="text-xs font-semibold text-slate-500">当前登录用户</p>
               <p className="text-sm font-medium text-ink">{userEmail}</p>
+              <p className="mt-1 text-xs text-slate-500">
+                权限角色：{currentRoleLabel}
+              </p>
             </div>
             <SignOutButton />
           </div>
