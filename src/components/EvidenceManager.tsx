@@ -199,14 +199,14 @@ export function EvidenceManager({
                 onChange={(event) => setMonth(event.target.value)}
               />
             </label>
-            <label className="text-sm font-medium text-ink">
-              凭证类型
+            <label className="flex items-center gap-3 text-sm font-medium text-ink">
+              <span className="whitespace-nowrap">凭证类型：</span>
               <select
                 value={typeFilter}
                 onChange={(event) =>
                   setTypeFilter(event.target.value as EvidenceFilter)
                 }
-                className="mt-2 block rounded-md border border-stone-300 bg-white px-3 py-2 text-sm"
+                className="block rounded-md border border-stone-300 bg-white px-3 py-2 text-sm"
               >
                 <option value="all">全部</option>
                 <option value="income">收入凭证</option>

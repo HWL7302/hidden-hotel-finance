@@ -333,7 +333,35 @@ export function MonthlyClosingManager({
         <div>
           <h2 className="text-2xl font-bold text-ink">月度结算</h2>
         </div>
-        <MonthToolbar month={month} onMonthChange={setMonth} />
+        <MonthToolbar
+          month={month}
+          onMonthChange={setMonth}
+          action={
+            <div className="flex items-center gap-3">
+              <span className="text-sm font-medium text-stone-600">
+                {isMonthLockPermissionMissing
+                  ? "锁定状态未授权"
+                  : isMonthLocked
+                    ? "已锁定"
+                    : "未锁定"}
+              </span>
+              <button
+                type="button"
+                onClick={() => void handleToggleMonthLock()}
+                disabled={isLockSaving || isLoading || isMonthLockPermissionMissing}
+                className="rounded-lg border border-pine/40 px-4 py-2 text-sm font-semibold text-slateblue transition hover:bg-pine/10 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isMonthLockPermissionMissing
+                  ? "等待授权"
+                  : isLockSaving
+                    ? "保存中..."
+                    : isMonthLocked
+                      ? "解锁当前月份"
+                      : "锁定当前月份"}
+              </button>
+            </div>
+          }
+        />
       </div>
 
       {error ? (
@@ -342,37 +370,11 @@ export function MonthlyClosingManager({
         </p>
       ) : null}
 
-      <div className="mt-6 flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-5 shadow-[0_8px_24px_rgba(15,23,42,0.04)] sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <p className="text-sm font-medium text-stone-600">状态</p>
-          <p className="mt-1 text-lg font-semibold text-ink">
-            {isMonthLockPermissionMissing
-              ? "锁定状态未授权"
-              : isMonthLocked
-                ? "🔒 已锁定"
-                : "🔓 未锁定"}
-          </p>
-          {isMonthLockPermissionMissing ? (
-            <p className="mt-1 text-sm text-amber-700">
-              页面可正常查看。执行 monthly_closings RLS SQL 后可使用锁定功能。
-            </p>
-          ) : null}
-        </div>
-        <button
-          type="button"
-          onClick={() => void handleToggleMonthLock()}
-          disabled={isLockSaving || isLoading || isMonthLockPermissionMissing}
-          className="rounded-lg border border-pine/40 px-4 py-2 text-sm font-semibold text-slateblue transition hover:bg-pine/10 disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {isMonthLockPermissionMissing
-            ? "等待授权"
-            : isLockSaving
-            ? "保存中..."
-            : isMonthLocked
-              ? "解锁月份"
-              : "锁定月份"}
-        </button>
-      </div>
+      {isMonthLockPermissionMissing ? (
+        <p className="mt-5 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          页面可正常查看。执行 monthly_closings RLS SQL 后可使用锁定功能。
+        </p>
+      ) : null}
 
       <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {cards.map((card) => (
@@ -417,12 +419,6 @@ export function MonthlyClosingManager({
         />
       </div>
 
-      <div className="mt-6 rounded-xl border border-slate-200 bg-white p-5 shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
-        <h3 className="text-lg font-semibold text-ink">后续功能预留</h3>
-        <p className="mt-3 text-sm leading-6 text-stone-600">
-          后续将增加导出月报。
-        </p>
-      </div>
     </section>
   );
 }

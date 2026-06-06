@@ -127,6 +127,7 @@ export function DividendRecordsManager({
   });
   const [isLoading, setIsLoading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isMonthLocked, setIsMonthLocked] = useState(false);
   const [error, setError] = useState(storeLoadError);
@@ -466,6 +467,152 @@ export function DividendRecordsManager({
     await loadDividendData();
   }
 
+  async function handleRefreshDividends() {
+    if (!defaultStoreId) {
+      setError("无法刷新分红记录：当前用户没有绑定 store_id。");
+      return;
+    }
+
+    setError("");
+    setNotice("");
+
+    const range = getMonthRange(month);
+    setIsRefreshing(true);
+    const [incomeResult, expenseResult, investorResult, dividendResult] =
+      await Promise.all([
+        supabase
+          .from("incomes")
+          .select("net_amount")
+          .eq("store_id", defaultStoreId)
+          .gte("settlement_period", range.start)
+          .lt("settlement_period", range.end),
+        supabase
+          .from("expenses")
+          .select("amount,included_in_monthly_cost")
+          .eq("store_id", defaultStoreId)
+          .gte("date", range.start)
+          .lt("date", range.end),
+        supabase
+          .from("investors")
+          .select("id,name,investment_amount,share_ratio,is_active")
+          .eq("store_id", defaultStoreId)
+          .eq("is_active", true)
+          .order("created_at", { ascending: true }),
+        supabase
+          .from("dividend_records")
+          .select(
+            "id,store_id,settlement_month,investor_id,investor_name,share_ratio,expected_amount,paid_amount,status,paid_date,receipt_id,notes,created_at"
+          )
+          .eq("store_id", defaultStoreId)
+          .eq("settlement_month", selectedMonthStart)
+          .order("created_at", { ascending: true })
+      ]);
+
+    if (incomeResult.error) {
+      setIsRefreshing(false);
+      setError(incomeResult.error.message);
+      return;
+    }
+
+    if (expenseResult.error) {
+      setIsRefreshing(false);
+      setError(expenseResult.error.message);
+      return;
+    }
+
+    if (investorResult.error) {
+      setIsRefreshing(false);
+      setError(investorResult.error.message);
+      return;
+    }
+
+    if (dividendResult.error) {
+      setIsRefreshing(false);
+      setError(dividendResult.error.message);
+      return;
+    }
+
+    const latestIncomes = (incomeResult.data ?? []) as IncomeRecord[];
+    const latestExpenses = (expenseResult.data ?? []) as ExpenseRecord[];
+    const latestInvestors = (investorResult.data ?? []) as InvestorRecord[];
+    const latestRecords = (dividendResult.data ?? []) as DividendRecord[];
+
+    if (latestRecords.length === 0) {
+      setIsRefreshing(false);
+      setError("请先生成本月分红记录。");
+      return;
+    }
+
+    const totalIncome = latestIncomes.reduce(
+      (sum, income) => sum + parseAmount(income.net_amount),
+      0
+    );
+    const totalExpense = latestExpenses.reduce((sum, expense) => {
+      if (!expense.included_in_monthly_cost) {
+        return sum;
+      }
+
+      return sum + parseAmount(expense.amount);
+    }, 0);
+    const latestNetProfit = roundMoney(totalIncome - totalExpense);
+    const distributableProfit = latestNetProfit > 0 ? latestNetProfit : 0;
+
+    if (latestNetProfit <= 0) {
+      setIsRefreshing(false);
+      setError("当前月份无可分红利润。");
+      return;
+    }
+
+    const investorById = new Map(
+      latestInvestors.map((investor) => [investor.id, investor])
+    );
+    const refreshableRecords = latestRecords.filter(
+      (record) => record.status === "unpaid" || record.status === "deferred"
+    );
+
+    if (refreshableRecords.length === 0) {
+      setIsRefreshing(false);
+      setNotice("本月没有未发放或暂缓发放的分红记录需要刷新。");
+      setIncomes(latestIncomes);
+      setExpenses(latestExpenses);
+      setInvestors(latestInvestors);
+      setRecords(latestRecords);
+      return;
+    }
+
+    const updateResults = await Promise.all(
+      refreshableRecords.map((record) => {
+        const investor = investorById.get(record.investor_id);
+        const nextShareRatio = investor?.share_ratio ?? record.share_ratio;
+        const expectedAmount = roundMoney(
+          distributableProfit * parseAmount(nextShareRatio)
+        );
+
+        return supabase
+          .from("dividend_records")
+          .update({
+            investor_name: investor?.name ?? record.investor_name,
+            share_ratio: nextShareRatio,
+            expected_amount: expectedAmount,
+            paid_amount:
+              record.status === "unpaid" ? expectedAmount : record.paid_amount
+          })
+          .eq("id", record.id);
+      })
+    );
+
+    setIsRefreshing(false);
+
+    const updateError = updateResults.find((result) => result.error)?.error;
+    if (updateError) {
+      setError(updateError.message);
+      return;
+    }
+
+    setNotice("本月分红数据已刷新，已发放记录未修改。");
+    await loadDividendData();
+  }
+
   const cards = [
     { label: "本月净利润", value: formatMoney(summary.netProfit) },
     { label: "可分配利润", value: formatMoney(summary.distributableProfit) },
@@ -532,8 +679,16 @@ export function DividendRecordsManager({
       </div>
 
       <div className="mt-6 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
-        <div className="border-b border-stone-200 px-5 py-4">
+        <div className="flex items-center justify-between gap-4 border-b border-stone-200 px-5 py-4">
           <h3 className="text-lg font-semibold text-ink">本月分红明细</h3>
+          <button
+            type="button"
+            onClick={() => void handleRefreshDividends()}
+            disabled={isRefreshing || isLoading}
+            className="rounded-md border border-stone-300 px-3 py-2 text-sm font-medium text-ink transition hover:border-pine hover:text-pine disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isRefreshing ? "刷新中..." : "刷新"}
+          </button>
         </div>
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-stone-200 text-sm">
