@@ -4,7 +4,7 @@ export const roleOptions = [
   { value: "admin", label: "管理员" },
   { value: "manager", label: "管理方" },
   { value: "operator", label: "经营方" },
-  { value: "viewer", label: "仅查看" }
+  { value: "viewer", label: "投资人" }
 ] as const;
 
 export type AppRole = (typeof roleOptions)[number]["value"];
@@ -70,19 +70,22 @@ const pageAccess: Record<AppRole, DashboardPageKey[]> = {
     "dividends",
     "evidence"
   ],
-  operator: ["home", "income", "expenses", "rooms", "monthlyClosing", "evidence"],
-  viewer: ["home", "monthlyClosing", "dividends", "evidence"]
+  operator: ["home", "income", "expenses", "monthlyClosing", "evidence", "reports"],
+  viewer: ["home", "rooms", "monthlyClosing", "dividends", "evidence", "reports"]
 };
 
-const actionAccess: Record<Exclude<PermissionAction, "deleteDividendRecord">, AppRole[]> = {
+const actionAccess: Record<
+  Exclude<PermissionAction, "deleteDividendRecord">,
+  AppRole[]
+> = {
   manageIncome: ["admin", "manager", "operator"],
   manageExpenses: ["admin", "manager", "operator"],
   uploadEvidence: ["admin", "manager", "operator"],
   deleteEvidence: ["admin", "manager", "operator"],
-  toggleMonthLock: ["admin"],
+  toggleMonthLock: ["admin", "manager"],
   manageInvestors: ["admin"],
   manageInvestorPermissions: ["admin"],
-  manageInvestmentBaseline: ["admin"],
+  manageInvestmentBaseline: ["admin", "manager"],
   generateDividends: ["admin", "manager"],
   refreshDividends: ["admin", "manager"],
   editDividends: ["admin", "manager"],
@@ -97,7 +100,7 @@ export function normalizeRole(value: string | null | undefined): AppRole {
 }
 
 export function getRoleLabel(role: AppRole) {
-  return roleOptions.find((option) => option.value === role)?.label ?? "仅查看";
+  return roleOptions.find((option) => option.value === role)?.label ?? "投资人";
 }
 
 export function canAccessPage(role: AppRole, page: DashboardPageKey) {

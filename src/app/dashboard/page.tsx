@@ -11,6 +11,7 @@ export default async function DashboardPage() {
 
   return (
     <HomeDashboard
+      currentRole={context.currentRole}
       defaultStoreId={context.defaultStoreId}
       storeLoadError={context.storeLoadError}
     />

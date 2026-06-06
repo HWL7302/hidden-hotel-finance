@@ -3,20 +3,15 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { SignOutButton } from "@/components/SignOutButton";
-import {
-  getNavigationItemsForRole,
-  type AppRole
-} from "@/lib/permissions";
+import { getNavigationItemsForRole, type AppRole } from "@/lib/permissions";
 
 export function DashboardShell({
   userEmail,
   currentRole,
-  currentRoleLabel,
   children
 }: {
   userEmail: string;
   currentRole: AppRole;
-  currentRoleLabel: string;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -65,9 +60,6 @@ export function DashboardShell({
             <div>
               <p className="text-xs font-semibold text-slate-500">当前登录用户</p>
               <p className="text-sm font-medium text-ink">{userEmail}</p>
-              <p className="mt-1 text-xs text-slate-500">
-                权限角色：{currentRoleLabel}
-              </p>
             </div>
             <SignOutButton />
           </div>

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { MonthToolbar } from "@/components/MonthToolbar";
 import { createClient } from "@/lib/supabase-client";
+import { type AppRole } from "@/lib/permissions";
 
 type IncomeRecord = {
   net_amount: string | number | null;
@@ -93,9 +94,11 @@ function formatPercent(value: number) {
 }
 
 export function HomeDashboard({
+  currentRole,
   defaultStoreId,
   storeLoadError
 }: {
+  currentRole: AppRole;
   defaultStoreId: string | null;
   storeLoadError: string;
 }) {
@@ -472,20 +475,22 @@ export function HomeDashboard({
         ))}
       </div>
 
-      <div className="mt-6 rounded-xl border border-slate-200 bg-white p-5 shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
-        <h3 className="text-lg font-semibold text-ink">经营提醒</h3>
-        {hasReminder ? (
-          <ul className="mt-4 grid gap-3 text-sm text-stone-700 sm:grid-cols-2 xl:grid-cols-3">
-            {reminders.map((item) => (
-              <li key={item} className="rounded-lg bg-slate-50 px-3 py-2">
-                {item}
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="mt-4 text-sm text-stone-500">暂无异常提醒</p>
-        )}
-      </div>
+      {currentRole === "admin" ? (
+        <div className="mt-6 rounded-xl border border-slate-200 bg-white p-5 shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
+          <h3 className="text-lg font-semibold text-ink">经营提醒</h3>
+          {hasReminder ? (
+            <ul className="mt-4 grid gap-3 text-sm text-stone-700 sm:grid-cols-2 xl:grid-cols-3">
+              {reminders.map((item) => (
+                <li key={item} className="rounded-lg bg-slate-50 px-3 py-2">
+                  {item}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-4 text-sm text-stone-500">暂无异常提醒</p>
+          )}
+        </div>
+      ) : null}
     </section>
   );
 }

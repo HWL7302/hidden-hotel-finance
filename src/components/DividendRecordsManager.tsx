@@ -19,6 +19,7 @@ type ExpenseRecord = {
 type InvestorRecord = {
   id: string;
   name: string;
+  email: string | null;
   investment_amount: string | number;
   share_ratio: string | number;
   is_active: boolean;
@@ -108,10 +109,12 @@ function todayValue() {
 
 export function DividendRecordsManager({
   currentRole,
+  userEmail,
   defaultStoreId,
   storeLoadError
 }: {
   currentRole: AppRole;
+  userEmail: string;
   defaultStoreId: string | null;
   storeLoadError: string;
 }) {
@@ -199,13 +202,21 @@ export function DividendRecordsManager({
     setIsLoading(true);
 
     const range = getMonthRange(month);
-    const [
-      incomeResult,
-      expenseResult,
-      investorResult,
-      dividendResult,
-      closingResult
-    ] =
+    const normalizedEmail = userEmail.trim().toLowerCase();
+    const isInvestorView = currentRole === "viewer";
+
+    let investorQuery = supabase
+      .from("investors")
+      .select("id,name,email,investment_amount,share_ratio,is_active")
+      .eq("store_id", defaultStoreId)
+      .eq("is_active", true)
+      .order("created_at", { ascending: true });
+
+    if (isInvestorView) {
+      investorQuery = investorQuery.ilike("email", normalizedEmail);
+    }
+
+    const [incomeResult, expenseResult, investorResult, closingResult] =
       await Promise.all([
         supabase
           .from("incomes")
@@ -219,20 +230,7 @@ export function DividendRecordsManager({
           .eq("store_id", defaultStoreId)
           .gte("date", range.start)
           .lt("date", range.end),
-        supabase
-          .from("investors")
-          .select("id,name,investment_amount,share_ratio,is_active")
-          .eq("store_id", defaultStoreId)
-          .eq("is_active", true)
-          .order("created_at", { ascending: true }),
-        supabase
-          .from("dividend_records")
-          .select(
-            "id,store_id,settlement_month,investor_id,investor_name,share_ratio,expected_amount,paid_amount,status,paid_date,receipt_id,notes,created_at"
-          )
-          .eq("store_id", defaultStoreId)
-          .eq("settlement_month", selectedMonthStart)
-          .order("created_at", { ascending: true }),
+        investorQuery,
         supabase
           .from("monthly_closings")
           .select("is_locked")
@@ -258,6 +256,34 @@ export function DividendRecordsManager({
       return;
     }
 
+    const loadedInvestors = (investorResult.data ?? []) as InvestorRecord[];
+    const matchedInvestor = isInvestorView ? loadedInvestors[0] ?? null : null;
+
+    if (isInvestorView && !matchedInvestor) {
+      setIncomes((incomeResult.data ?? []) as IncomeRecord[]);
+      setExpenses((expenseResult.data ?? []) as ExpenseRecord[]);
+      setInvestors([]);
+      setRecords([]);
+      setIsMonthLocked(Boolean((closingResult.data as MonthlyClosingRecord | null)?.is_locked));
+      setError("当前登录邮箱未匹配到投资人记录，暂无可查看的分红数据。");
+      return;
+    }
+
+    let dividendQuery = supabase
+      .from("dividend_records")
+      .select(
+        "id,store_id,settlement_month,investor_id,investor_name,share_ratio,expected_amount,paid_amount,status,paid_date,receipt_id,notes,created_at"
+      )
+      .eq("store_id", defaultStoreId)
+      .eq("settlement_month", selectedMonthStart)
+      .order("created_at", { ascending: true });
+
+    if (isInvestorView && matchedInvestor) {
+      dividendQuery = dividendQuery.eq("investor_id", matchedInvestor.id);
+    }
+
+    const dividendResult = await dividendQuery;
+
     if (dividendResult.error) {
       setError(dividendResult.error.message);
       return;
@@ -273,7 +299,7 @@ export function DividendRecordsManager({
 
     setIncomes((incomeResult.data ?? []) as IncomeRecord[]);
     setExpenses((expenseResult.data ?? []) as ExpenseRecord[]);
-    setInvestors((investorResult.data ?? []) as InvestorRecord[]);
+    setInvestors(loadedInvestors);
     setRecords((dividendResult.data ?? []) as DividendRecord[]);
     setIsMonthLocked(Boolean((closingResult.data as MonthlyClosingRecord | null)?.is_locked));
   }
@@ -667,12 +693,20 @@ export function DividendRecordsManager({
     await loadDividendData();
   }
 
-  const cards = [
-    { label: "本月净利润", value: formatMoney(summary.netProfit) },
-    { label: "可分配利润", value: formatMoney(summary.distributableProfit) },
-    { label: "已发放金额", value: formatMoney(summary.paidAmount) },
-    { label: "未发放金额", value: formatMoney(summary.unpaidAmount) }
-  ];
+  const cards =
+    currentRole === "viewer"
+      ? [
+          { label: "我的累计分红", value: formatMoney(summary.paidAmount + summary.unpaidAmount) },
+          { label: "我的待发放分红", value: formatMoney(summary.unpaidAmount) },
+          { label: "我的已发放分红", value: formatMoney(summary.paidAmount) },
+          { label: "本月记录数", value: String(records.length) }
+        ]
+      : [
+          { label: "本月净利润", value: formatMoney(summary.netProfit) },
+          { label: "可分配利润", value: formatMoney(summary.distributableProfit) },
+          { label: "已发放金额", value: formatMoney(summary.paidAmount) },
+          { label: "未发放金额", value: formatMoney(summary.unpaidAmount) }
+        ];
 
   return (
     <section>
@@ -736,7 +770,9 @@ export function DividendRecordsManager({
 
       <div className="mt-6 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
         <div className="flex items-center justify-between gap-4 border-b border-stone-200 px-5 py-4">
-          <h3 className="text-lg font-semibold text-ink">本月分红明细</h3>
+          <h3 className="text-lg font-semibold text-ink">
+            {currentRole === "viewer" ? "我的分红记录" : "本月分红明细"}
+          </h3>
           {canRefreshDividends ? (
             <button
               type="button"

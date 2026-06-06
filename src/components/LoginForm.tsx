@@ -25,7 +25,11 @@ export function LoginForm() {
     setIsLoading(false);
 
     if (signInError) {
-      setError(signInError.message);
+      setError(
+        signInError.message === "Invalid login credentials"
+          ? "账号或密码错误，请确认后重新输入。"
+          : signInError.message
+      );
       return;
     }
 

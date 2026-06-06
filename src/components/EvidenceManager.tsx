@@ -129,6 +129,11 @@ export function EvidenceManager({
   }
 
   async function handleDelete(record: EvidenceRecord) {
+    if (!canManage) {
+      setError("当前账号无权删除凭证。");
+      return;
+    }
+
     if (!window.confirm(`确认删除凭证「${record.file_name}」吗？`)) {
       return;
     }

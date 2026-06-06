@@ -12,6 +12,7 @@ export default async function DividendsPage() {
   return (
     <DividendRecordsManager
       currentRole={context.currentRole}
+      userEmail={context.userEmail}
       defaultStoreId={context.defaultStoreId}
       storeLoadError={context.storeLoadError}
     />

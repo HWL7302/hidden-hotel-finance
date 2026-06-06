@@ -6,14 +6,12 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { userEmail, currentRole, currentRoleLabel } =
-    await getDashboardContext();
+  const { userEmail, currentRole } = await getDashboardContext();
 
   return (
     <DashboardShell
       userEmail={userEmail}
       currentRole={currentRole}
-      currentRoleLabel={currentRoleLabel}
     >
       {children}
     </DashboardShell>
