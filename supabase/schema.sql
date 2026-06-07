@@ -549,12 +549,12 @@ create policy "dividend records admin all"
   to authenticated
   using (
     auth.uid() is not null
-    and public.current_profile_role() = 'admin'
+    and public.current_investor_permission_role() = 'admin'
     and public.current_profile_store_id() = store_id
   )
   with check (
     auth.uid() is not null
-    and public.current_profile_role() = 'admin'
+    and public.current_investor_permission_role() = 'admin'
     and public.current_profile_store_id() = store_id
   );
 
@@ -563,14 +563,15 @@ create policy "dividend records investor own select"
   to authenticated
   using (
     auth.uid() is not null
-    and public.current_profile_role() = 'investor'
+    and public.current_investor_permission_role() = 'viewer'
     and public.current_profile_store_id() = store_id
     and exists (
       select 1
       from public.investors i
       where i.id = investor_id
-        and i.user_id = auth.uid()
+        and trim(lower(i.email)) = trim(lower(coalesce(auth.jwt() ->> 'email', '')))
         and i.store_id = store_id
+        and i.is_active = true
     )
   );
 

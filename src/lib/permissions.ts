@@ -60,11 +60,17 @@ export const navigationItems: {
 
 const pageAccess: Record<AppRole, DashboardPageKey[]> = {
   admin: navigationItems.map((item) => item.key),
-  operator: ["home", "income", "expenses", "rooms", "monthlyClosing", "evidence"],
-  viewer: [
+  operator: [
     "home",
     "income",
     "expenses",
+    "rooms",
+    "monthlyClosing",
+    "evidence",
+    "reports"
+  ],
+  viewer: [
+    "home",
     "rooms",
     "monthlyClosing",
     "dividends",

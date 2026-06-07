@@ -136,6 +136,7 @@ export function DividendRecordsManager({
   const [expenses, setExpenses] = useState<ExpenseRecord[]>([]);
   const [investors, setInvestors] = useState<InvestorRecord[]>([]);
   const [records, setRecords] = useState<DividendRecord[]>([]);
+  const [summaryRecords, setSummaryRecords] = useState<DividendRecord[]>([]);
   const [editingRecord, setEditingRecord] = useState<DividendRecord | null>(null);
   const [editForm, setEditForm] = useState<EditFormState>({
     paidAmount: "",
@@ -167,14 +168,16 @@ export function DividendRecordsManager({
     }, 0);
     const netProfit = roundMoney(totalIncome - totalExpense);
     const distributableProfit = netProfit > 0 ? netProfit : 0;
-    const paidAmount = records.reduce((sum, record) => {
+    const recordsForSummary =
+      currentRole === "viewer" ? summaryRecords : records;
+    const paidAmount = recordsForSummary.reduce((sum, record) => {
       if (record.status !== "paid") {
         return sum;
       }
 
       return sum + parseAmount(record.paid_amount);
     }, 0);
-    const unpaidAmount = records.reduce((sum, record) => {
+    const unpaidAmount = recordsForSummary.reduce((sum, record) => {
       if (record.status === "paid") {
         return sum;
       }
@@ -190,7 +193,7 @@ export function DividendRecordsManager({
       paidAmount: roundMoney(paidAmount),
       unpaidAmount: roundMoney(unpaidAmount)
     };
-  }, [expenses, incomes, records]);
+  }, [currentRole, expenses, incomes, records, summaryRecords]);
 
   async function loadDividendData() {
     if (!defaultStoreId) {
@@ -269,6 +272,7 @@ export function DividendRecordsManager({
       setExpenses((expenseResult.data ?? []) as ExpenseRecord[]);
       setInvestors([]);
       setRecords([]);
+      setSummaryRecords([]);
       setIsMonthLocked(Boolean((closingResult.data as MonthlyClosingRecord | null)?.is_locked));
       setError("当前账号尚未绑定投资人信息，请联系管理员确认登录邮箱。");
       return;
@@ -287,10 +291,29 @@ export function DividendRecordsManager({
       dividendQuery = dividendQuery.eq("investor_id", matchedInvestorId);
     }
 
-    const dividendResult = await dividendQuery;
+    const summaryDividendQuery =
+      isInvestorView && matchedInvestorId
+        ? supabase
+            .from("dividend_records")
+            .select(
+              "id,store_id,settlement_month,investor_id,investor_name,share_ratio,expected_amount,paid_amount,status,paid_date,receipt_id,notes,created_at"
+            )
+            .eq("store_id", defaultStoreId)
+            .eq("investor_id", matchedInvestorId)
+        : null;
+
+    const [dividendResult, summaryDividendResult] = await Promise.all([
+      dividendQuery,
+      summaryDividendQuery ?? Promise.resolve({ data: null, error: null })
+    ]);
 
     if (dividendResult.error) {
       setError(dividendResult.error.message);
+      return;
+    }
+
+    if (summaryDividendResult.error) {
+      setError(summaryDividendResult.error.message);
       return;
     }
 
@@ -306,6 +329,11 @@ export function DividendRecordsManager({
     setExpenses((expenseResult.data ?? []) as ExpenseRecord[]);
     setInvestors(loadedInvestors);
     setRecords((dividendResult.data ?? []) as DividendRecord[]);
+    setSummaryRecords(
+      isInvestorView
+        ? ((summaryDividendResult.data ?? []) as DividendRecord[])
+        : ((dividendResult.data ?? []) as DividendRecord[])
+    );
     setIsMonthLocked(Boolean((closingResult.data as MonthlyClosingRecord | null)?.is_locked));
   }
 
