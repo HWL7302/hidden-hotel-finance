@@ -321,6 +321,7 @@ $$;
 create or replace function public.current_investor_profile()
 returns table (
   id uuid,
+  store_id uuid,
   investment_amount numeric,
   share_ratio numeric
 )
@@ -329,7 +330,7 @@ stable
 security definer
 set search_path = public
 as $$
-  select i.id, i.investment_amount, i.share_ratio
+  select i.id, i.store_id, i.investment_amount, i.share_ratio
   from public.investors i
   where trim(lower(i.email)) = trim(lower(coalesce(auth.jwt() ->> 'email', '')))
     and i.is_active = true
@@ -641,14 +642,11 @@ create policy "dividend records investor own select"
   using (
     auth.uid() is not null
     and public.current_investor_permission_role() = 'viewer'
-    and public.current_profile_store_id() = store_id
     and exists (
       select 1
-      from public.investors i
-      where i.id = investor_id
-        and trim(lower(i.email)) = trim(lower(coalesce(auth.jwt() ->> 'email', '')))
-        and i.store_id = store_id
-        and i.is_active = true
+      from public.current_investor_profile() p
+      where p.id = dividend_records.investor_id
+        and p.store_id = dividend_records.store_id
     )
   );
 

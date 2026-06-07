@@ -27,6 +27,7 @@ type InvestorRecord = {
 
 type InvestorProfile = {
   id: string;
+  store_id: string;
   investment_amount: string | number | null;
   share_ratio: string | number | null;
 };
@@ -103,6 +104,10 @@ function formatTableMoney(value: number) {
 
 function formatPercentFromFraction(value: string | number) {
   return `${(parseAmount(value) * 100).toFixed(2)}%`;
+}
+
+function formatMonthLabel(value: string) {
+  return value ? value.slice(0, 7).replace("-", "年") + "月" : "-";
 }
 
 function isValidAmount(value: string) {
@@ -196,7 +201,9 @@ export function DividendRecordsManager({
   }, [currentRole, expenses, incomes, records, summaryRecords]);
 
   async function loadDividendData() {
-    if (!defaultStoreId) {
+    const isInvestorView = currentRole === "viewer";
+
+    if (!defaultStoreId && !isInvestorView) {
       setError(
         storeLoadError ||
           "无法读取分红数据：当前用户没有绑定 store_id。请先确认 profile.store_id。"
@@ -209,7 +216,6 @@ export function DividendRecordsManager({
     setIsLoading(true);
 
     const range = getMonthRange(month);
-    const isInvestorView = currentRole === "viewer";
 
     const investorQuery = isInvestorView
       ? supabase.rpc("current_investor_profile")
@@ -222,25 +228,31 @@ export function DividendRecordsManager({
 
     const [incomeResult, expenseResult, investorResult, closingResult] =
       await Promise.all([
-        supabase
-          .from("incomes")
-          .select("net_amount")
-          .eq("store_id", defaultStoreId)
-          .gte("settlement_period", range.start)
-          .lt("settlement_period", range.end),
-        supabase
-          .from("expenses")
-          .select("amount,included_in_monthly_cost")
-          .eq("store_id", defaultStoreId)
-          .gte("date", range.start)
-          .lt("date", range.end),
+        isInvestorView
+          ? Promise.resolve({ data: [], error: null })
+          : supabase
+              .from("incomes")
+              .select("net_amount")
+              .eq("store_id", defaultStoreId)
+              .gte("settlement_period", range.start)
+              .lt("settlement_period", range.end),
+        isInvestorView
+          ? Promise.resolve({ data: [], error: null })
+          : supabase
+              .from("expenses")
+              .select("amount,included_in_monthly_cost")
+              .eq("store_id", defaultStoreId)
+              .gte("date", range.start)
+              .lt("date", range.end),
         investorQuery,
-        supabase
-          .from("monthly_closings")
-          .select("is_locked")
-          .eq("store_id", defaultStoreId)
-          .eq("month", selectedMonthStart)
-          .maybeSingle()
+        isInvestorView
+          ? Promise.resolve({ data: null, error: null })
+          : supabase
+              .from("monthly_closings")
+              .select("is_locked")
+              .eq("store_id", defaultStoreId)
+              .eq("month", selectedMonthStart)
+              .maybeSingle()
       ]);
 
     setIsLoading(false);
@@ -263,9 +275,11 @@ export function DividendRecordsManager({
     const loadedInvestors = isInvestorView
       ? []
       : ((investorResult.data ?? []) as InvestorRecord[]);
-    const matchedInvestorId = isInvestorView
-      ? ((investorResult.data as InvestorProfile[] | null)?.[0]?.id ?? null)
+    const matchedInvestor = isInvestorView
+      ? ((investorResult.data as InvestorProfile[] | null)?.[0] ?? null)
       : null;
+    const matchedInvestorId = matchedInvestor?.id ?? null;
+    const queryStoreId = isInvestorView ? matchedInvestor?.store_id : defaultStoreId;
 
     if (isInvestorView && !matchedInvestorId) {
       setIncomes((incomeResult.data ?? []) as IncomeRecord[]);
@@ -283,7 +297,7 @@ export function DividendRecordsManager({
       .select(
         "id,store_id,settlement_month,investor_id,investor_name,share_ratio,expected_amount,paid_amount,status,paid_date,receipt_id,notes,created_at"
       )
-      .eq("store_id", defaultStoreId)
+      .eq("store_id", queryStoreId)
       .eq("settlement_month", selectedMonthStart)
       .order("created_at", { ascending: true });
 
@@ -298,8 +312,10 @@ export function DividendRecordsManager({
             .select(
               "id,store_id,settlement_month,investor_id,investor_name,share_ratio,expected_amount,paid_amount,status,paid_date,receipt_id,notes,created_at"
             )
-            .eq("store_id", defaultStoreId)
+            .eq("store_id", queryStoreId)
             .eq("investor_id", matchedInvestorId)
+            .order("settlement_month", { ascending: false })
+            .order("created_at", { ascending: false })
         : null;
 
     const [dividendResult, summaryDividendResult] = await Promise.all([
@@ -336,6 +352,9 @@ export function DividendRecordsManager({
     );
     setIsMonthLocked(Boolean((closingResult.data as MonthlyClosingRecord | null)?.is_locked));
   }
+
+  const visibleRecords =
+    currentRole === "viewer" ? summaryRecords : records;
 
   useEffect(() => {
     void loadDividendData();
@@ -841,6 +860,7 @@ export function DividendRecordsManager({
             <thead className="bg-slate-50 text-left text-slate-600">
               <tr>
                 <TableHead>投资人姓名</TableHead>
+                <TableHead>结算月份</TableHead>
                 <TableHead>当前持股比例</TableHead>
                 <TableHead>应分红金额（RMB）</TableHead>
                 <TableHead>实发金额（RMB）</TableHead>
@@ -853,20 +873,23 @@ export function DividendRecordsManager({
             <tbody className="divide-y divide-stone-100">
               {isLoading ? (
                 <tr>
-                  <td className="px-4 py-6 text-stone-500" colSpan={8}>
+                  <td className="px-4 py-6 text-stone-500" colSpan={9}>
                     正在读取分红记录...
                   </td>
                 </tr>
-              ) : records.length === 0 ? (
+              ) : visibleRecords.length === 0 ? (
                 <tr>
-                  <td className="px-4 py-6 text-stone-500" colSpan={8}>
-                    当前月份暂无分红记录。
+                  <td className="px-4 py-6 text-stone-500" colSpan={9}>
+                    {currentRole === "viewer"
+                      ? "暂无可查看的分红记录。"
+                      : "当前月份暂无分红记录。"}
                   </td>
                 </tr>
               ) : (
-                records.map((record) => (
+                visibleRecords.map((record) => (
                   <tr key={record.id} className="align-top">
                     <TableCell>{record.investor_name}</TableCell>
+                    <TableCell>{formatMonthLabel(record.settlement_month)}</TableCell>
                     <TableCell>{formatPercentFromFraction(record.share_ratio)}</TableCell>
                     <TableCell>
                       {formatTableMoney(parseAmount(record.expected_amount))}
