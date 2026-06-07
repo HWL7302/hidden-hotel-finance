@@ -5,7 +5,7 @@ begin;
 
 update public.investors
 set permission_role = 'viewer'
-where permission_role = 'manager';
+where permission_role not in ('viewer', 'operator', 'admin');
 
 alter table public.investors
   drop constraint if exists investors_permission_role_check;

@@ -18,7 +18,7 @@ where permission_role is null;
 
 update public.investors
 set permission_role = 'viewer'
-where permission_role = 'manager';
+where permission_role not in ('viewer', 'operator', 'admin');
 
 alter table public.investors
   alter column permission_role set default 'viewer',
