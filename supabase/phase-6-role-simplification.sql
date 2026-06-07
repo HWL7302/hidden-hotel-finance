@@ -146,6 +146,65 @@ create trigger prevent_fixed_admin_investment_record_changes
 before insert or update or delete on public.investment_records
 for each row execute function public.prevent_fixed_admin_investment_record_changes();
 
+drop policy if exists "investors admin all" on public.investors;
+drop policy if exists "investment records admin all" on public.investment_records;
+
+create policy "investors admin all"
+  on public.investors for all
+  to authenticated
+  using (
+    auth.uid() is not null
+    and public.current_investor_permission_role() = 'admin'
+    and (
+      public.current_profile_store_id() = store_id
+      or exists (
+        select 1
+        from public.current_investor_profile() p
+        where p.store_id = investors.store_id
+      )
+    )
+  )
+  with check (
+    auth.uid() is not null
+    and public.current_investor_permission_role() = 'admin'
+    and (
+      public.current_profile_store_id() = store_id
+      or exists (
+        select 1
+        from public.current_investor_profile() p
+        where p.store_id = investors.store_id
+      )
+    )
+  );
+
+create policy "investment records admin all"
+  on public.investment_records for all
+  to authenticated
+  using (
+    auth.uid() is not null
+    and public.current_investor_permission_role() = 'admin'
+    and (
+      public.current_profile_store_id() = store_id
+      or exists (
+        select 1
+        from public.current_investor_profile() p
+        where p.store_id = investment_records.store_id
+      )
+    )
+  )
+  with check (
+    auth.uid() is not null
+    and public.current_investor_permission_role() = 'admin'
+    and (
+      public.current_profile_store_id() = store_id
+      or exists (
+        select 1
+        from public.current_investor_profile() p
+        where p.store_id = investment_records.store_id
+      )
+    )
+  );
+
 drop policy if exists "evidence select by store role" on public.evidence_files;
 drop policy if exists "evidence insert by admin operator" on public.evidence_files;
 drop policy if exists "evidence delete by admin operator" on public.evidence_files;

@@ -599,13 +599,27 @@ create policy "investors admin all"
   to authenticated
   using (
     auth.uid() is not null
-    and public.current_profile_role() = 'admin'
-    and public.current_profile_store_id() = store_id
+    and public.current_investor_permission_role() = 'admin'
+    and (
+      public.current_profile_store_id() = store_id
+      or exists (
+        select 1
+        from public.current_investor_profile() p
+        where p.store_id = investors.store_id
+      )
+    )
   )
   with check (
     auth.uid() is not null
-    and public.current_profile_role() = 'admin'
-    and public.current_profile_store_id() = store_id
+    and public.current_investor_permission_role() = 'admin'
+    and (
+      public.current_profile_store_id() = store_id
+      or exists (
+        select 1
+        from public.current_investor_profile() p
+        where p.store_id = investors.store_id
+      )
+    )
   );
 
 create policy "investment records admin all"
@@ -613,13 +627,27 @@ create policy "investment records admin all"
   to authenticated
   using (
     auth.uid() is not null
-    and public.current_profile_role() = 'admin'
-    and public.current_profile_store_id() = store_id
+    and public.current_investor_permission_role() = 'admin'
+    and (
+      public.current_profile_store_id() = store_id
+      or exists (
+        select 1
+        from public.current_investor_profile() p
+        where p.store_id = investment_records.store_id
+      )
+    )
   )
   with check (
     auth.uid() is not null
-    and public.current_profile_role() = 'admin'
-    and public.current_profile_store_id() = store_id
+    and public.current_investor_permission_role() = 'admin'
+    and (
+      public.current_profile_store_id() = store_id
+      or exists (
+        select 1
+        from public.current_investor_profile() p
+        where p.store_id = investment_records.store_id
+      )
+    )
   );
 
 create policy "dividend records admin all"
