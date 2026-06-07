@@ -43,7 +43,7 @@ set search_path = public
 as $$
   select
     case
-      when lower(coalesce(auth.jwt() ->> 'email', '')) = 'kiu9ninomi@gmail.com'
+      when trim(lower(coalesce(auth.jwt() ->> 'email', ''))) = 'kiu9ninomi@gmail.com'
         then 'admin'
       else coalesce(
         (

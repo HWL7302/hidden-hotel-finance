@@ -14,6 +14,34 @@ alter table public.investors
   add constraint investors_permission_role_check
   check (permission_role in ('viewer', 'operator', 'admin'));
 
+create or replace function public.current_investor_permission_role()
+returns text
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select
+    case
+      when trim(lower(coalesce(auth.jwt() ->> 'email', ''))) = 'kiu9ninomi@gmail.com'
+        then 'admin'
+      else coalesce(
+        (
+          select i.permission_role
+          from public.investors i
+          where trim(lower(i.email)) = trim(lower(coalesce(auth.jwt() ->> 'email', '')))
+            and i.is_active = true
+          order by i.created_at desc
+          limit 1
+        ),
+        'viewer'
+      )
+    end
+$$;
+
+revoke all on function public.current_investor_permission_role() from public;
+grant execute on function public.current_investor_permission_role() to authenticated;
+
 create or replace function public.current_investor_profile()
 returns table (
   id uuid,
@@ -35,6 +63,85 @@ $$;
 
 revoke all on function public.current_investor_profile() from public;
 grant execute on function public.current_investor_profile() to authenticated;
+
+create or replace function public.prevent_fixed_admin_investor_changes()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  fixed_email constant text := 'kiu9ninomi@gmail.com';
+  current_email text := trim(lower(coalesce(auth.jwt() ->> 'email', '')));
+begin
+  if tg_op = 'DELETE' then
+    if trim(lower(old.email)) = fixed_email and current_email <> fixed_email then
+      raise exception 'Fixed administrator investor record is protected.';
+    end if;
+
+    return old;
+  end if;
+
+  if (
+    trim(lower(coalesce(old.email, ''))) = fixed_email
+    or trim(lower(coalesce(new.email, ''))) = fixed_email
+  ) and current_email <> fixed_email then
+    raise exception 'Fixed administrator investor record is protected.';
+  end if;
+
+  if trim(lower(coalesce(old.email, ''))) = fixed_email then
+    new.email := fixed_email;
+    new.permission_role := 'admin';
+    new.is_active := true;
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists prevent_fixed_admin_investor_changes on public.investors;
+create trigger prevent_fixed_admin_investor_changes
+before update or delete on public.investors
+for each row execute function public.prevent_fixed_admin_investor_changes();
+
+create or replace function public.prevent_fixed_admin_investment_record_changes()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  fixed_email constant text := 'kiu9ninomi@gmail.com';
+  current_email text := trim(lower(coalesce(auth.jwt() ->> 'email', '')));
+  target_investor_id uuid;
+begin
+  if tg_op = 'DELETE' then
+    target_investor_id := old.investor_id;
+  else
+    target_investor_id := new.investor_id;
+  end if;
+
+  if current_email <> fixed_email and exists (
+    select 1
+    from public.investors i
+    where i.id = target_investor_id
+      and trim(lower(i.email)) = fixed_email
+  ) then
+    raise exception 'Fixed administrator investment records are protected.';
+  end if;
+
+  if tg_op = 'DELETE' then
+    return old;
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists prevent_fixed_admin_investment_record_changes on public.investment_records;
+create trigger prevent_fixed_admin_investment_record_changes
+before insert or update or delete on public.investment_records
+for each row execute function public.prevent_fixed_admin_investment_record_changes();
 
 drop policy if exists "evidence select by store role" on public.evidence_files;
 drop policy if exists "evidence insert by admin operator" on public.evidence_files;

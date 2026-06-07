@@ -361,11 +361,6 @@ export function DividendRecordsManager({
       return;
     }
 
-    if (records.length > 0) {
-      setError("本月分红记录已存在，请勿重复生成。");
-      return;
-    }
-
     if (summary.netProfit <= 0) {
       setError("本月无可分红利润。");
       return;
@@ -383,7 +378,19 @@ export function DividendRecordsManager({
       return;
     }
 
-    const payload = activeInvestors.map((investor) => {
+    const existingInvestorIds = new Set(
+      records.map((record) => record.investor_id)
+    );
+    const investorsWithoutCurrentMonthRecord = activeInvestors.filter(
+      (investor) => !existingInvestorIds.has(investor.id)
+    );
+
+    if (investorsWithoutCurrentMonthRecord.length === 0) {
+      setError("本月所有有效投资人均已有分红记录，请勿重复生成。");
+      return;
+    }
+
+    const payload = investorsWithoutCurrentMonthRecord.map((investor) => {
       const expectedAmount = roundMoney(
         summary.distributableProfit * parseAmount(investor.share_ratio)
       );
@@ -414,7 +421,11 @@ export function DividendRecordsManager({
       return;
     }
 
-    setNotice("本月分红记录已生成。");
+    setNotice(
+      records.length > 0
+        ? "已为本月新增投资人补生成未发放分红记录，已有记录未覆盖。"
+        : "本月分红记录已生成。"
+    );
     await loadDividendData();
   }
 
@@ -722,14 +733,22 @@ export function DividendRecordsManager({
       return;
     }
 
-    setNotice("本月分红数据已刷新，已发放记录未修改。");
+    const missingInvestorCount = refreshableRecords.filter(
+      (record) => !investorById.has(record.investor_id)
+    ).length;
+
+    setNotice(
+      missingInvestorCount > 0
+        ? `本月分红数据已刷新，已发放记录未修改；${missingInvestorCount} 条记录未匹配到当前有效投资人，已保留原持股比例。`
+        : "本月分红数据已刷新，已发放记录未修改。"
+    );
     await loadDividendData();
   }
 
   const cards =
     currentRole === "viewer"
       ? [
-          { label: "我的累计分红", value: formatMoney(summary.paidAmount + summary.unpaidAmount) },
+          { label: "我的累计分红", value: formatMoney(summary.paidAmount) },
           { label: "我的待发放分红", value: formatMoney(summary.unpaidAmount) },
           { label: "我的已发放分红", value: formatMoney(summary.paidAmount) },
           { label: "本月记录数", value: String(records.length) }

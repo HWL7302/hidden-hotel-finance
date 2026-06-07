@@ -8,6 +8,7 @@ import {
   investmentTypeOptions
 } from "@/lib/finance-options";
 import {
+  ADMIN_EMAIL,
   canPerform,
   getRoleLabel,
   normalizeRole,
@@ -117,17 +118,25 @@ function isValidEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
+function isFixedAdminEmail(value: string | null | undefined) {
+  return value?.trim().toLowerCase() === ADMIN_EMAIL;
+}
+
 export function InvestorManager({
   currentRole,
+  userEmail,
   defaultStoreId,
   storeLoadError
 }: {
   currentRole: AppRole;
+  userEmail: string;
   defaultStoreId: string | null;
   storeLoadError: string;
 }) {
   const supabase = useMemo(() => createClient(), []);
   const normalizedCurrentRole = currentRole;
+  const normalizedUserEmail = userEmail.trim().toLowerCase();
+  const isFixedAdminUser = normalizedUserEmail === ADMIN_EMAIL;
   const canManageInvestors = canPerform(normalizedCurrentRole, "manageInvestors");
   const canManageInvestorPermissions = canPerform(
     normalizedCurrentRole,
@@ -361,6 +370,11 @@ export function InvestorManager({
   }
 
   function startEdit(record: InvestmentRecord) {
+    if (!isFixedAdminUser && isFixedAdminEmail(record.investors?.email)) {
+      setError("固定管理员账号的投资信息受保护，不能被其他账号编辑。");
+      return;
+    }
+
     setEditingRecordId(record.id);
     setEditingInvestorId(record.investor_id);
     setForm({
@@ -385,6 +399,18 @@ export function InvestorManager({
     const normalizedContact = form.contact.trim();
 
     if (editingInvestorId) {
+      const editingInvestor = investors.find(
+        (investor) => investor.id === editingInvestorId
+      );
+
+      if (!isFixedAdminUser && isFixedAdminEmail(editingInvestor?.email)) {
+        throw new Error("固定管理员账号的投资人信息受保护，不能被其他账号修改。");
+      }
+
+      if (!isFixedAdminUser && normalizedEmail === ADMIN_EMAIL) {
+        throw new Error("固定管理员账号邮箱受保护，不能被其他账号占用或修改。");
+      }
+
       const { error: updateError } = await supabase
         .from("investors")
         .update({
@@ -410,6 +436,10 @@ export function InvestorManager({
     );
 
     if (existingInvestor) {
+      if (!isFixedAdminUser && isFixedAdminEmail(existingInvestor.email)) {
+        throw new Error("固定管理员账号的投资人信息受保护，不能被其他账号修改。");
+      }
+
       const { error: updateExistingError } = await supabase
         .from("investors")
         .update({
@@ -428,6 +458,10 @@ export function InvestorManager({
     }
 
     const amount = parseAmount(form.amount);
+    if (!isFixedAdminUser && normalizedEmail === ADMIN_EMAIL) {
+      throw new Error("固定管理员账号邮箱受保护，不能被其他账号新增或占用。");
+    }
+
     const { data, error: insertError } = await supabase
       .from("investors")
       .insert({
@@ -591,6 +625,18 @@ export function InvestorManager({
       return;
     }
 
+    if (
+      !isFixedAdminUser &&
+      (form.email.trim().toLowerCase() === ADMIN_EMAIL ||
+        (editingInvestorId &&
+          isFixedAdminEmail(
+            investors.find((investor) => investor.id === editingInvestorId)?.email
+          )))
+    ) {
+      setError("固定管理员账号受保护，不能被其他账号修改。");
+      return;
+    }
+
     setIsSaving(true);
 
     try {
@@ -631,6 +677,11 @@ export function InvestorManager({
   async function handleDelete(record: InvestmentRecord) {
     if (!canManageInvestors) {
       setError("当前账号无权删除投资记录。");
+      return;
+    }
+
+    if (!isFixedAdminUser && isFixedAdminEmail(record.investors?.email)) {
+      setError("固定管理员账号的投资记录受保护，不能被其他账号删除。");
       return;
     }
 
@@ -678,6 +729,12 @@ export function InvestorManager({
 
     setError("");
     setNotice("");
+
+    const targetInvestor = investors.find((investor) => investor.id === investorId);
+    if (!isFixedAdminUser && isFixedAdminEmail(targetInvestor?.email)) {
+      setError("固定管理员账号权限受保护，不能被其他账号修改。");
+      return;
+    }
 
     const { error: updateError } = await supabase
       .from("investors")
@@ -981,7 +1038,8 @@ export function InvestorManager({
                             <span>
                               {getRoleLabel(normalizeRole(summary.permissionRole))}
                             </span>
-                            {canManageInvestorPermissions ? (
+                            {canManageInvestorPermissions &&
+                            (isFixedAdminUser || !isFixedAdminEmail(summary.email)) ? (
                               <select
                                 value={normalizeRole(summary.permissionRole)}
                                 onChange={(event) =>
@@ -1066,20 +1124,27 @@ export function InvestorManager({
                         <TableCell>
                           {canManageInvestors ? (
                             <div className="flex gap-2">
-                              <button
-                                type="button"
-                                onClick={() => startEdit(record)}
-                                className="text-sm font-medium text-pine hover:underline"
-                              >
-                                编辑
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => void handleDelete(record)}
-                                className="text-sm font-medium text-red-700 hover:underline"
-                              >
-                                删除
-                              </button>
+                              {!isFixedAdminUser &&
+                              isFixedAdminEmail(record.investors?.email) ? (
+                                <span className="text-stone-400">受保护</span>
+                              ) : (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => startEdit(record)}
+                                    className="text-sm font-medium text-pine hover:underline"
+                                  >
+                                    编辑
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => void handleDelete(record)}
+                                    className="text-sm font-medium text-red-700 hover:underline"
+                                  >
+                                    删除
+                                  </button>
+                                </>
+                              )}
                             </div>
                           ) : (
                             <span className="text-stone-400">-</span>

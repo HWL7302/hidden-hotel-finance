@@ -12,6 +12,7 @@ export default async function InvestorsPage() {
   return (
     <InvestorManager
       currentRole={context.currentRole}
+      userEmail={context.userEmail}
       defaultStoreId={context.defaultStoreId}
       storeLoadError={context.storeLoadError}
     />
