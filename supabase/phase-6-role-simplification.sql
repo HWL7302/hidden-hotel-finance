@@ -39,6 +39,7 @@ grant execute on function public.current_investor_profile() to authenticated;
 drop policy if exists "evidence select by store role" on public.evidence_files;
 drop policy if exists "evidence insert by admin operator" on public.evidence_files;
 drop policy if exists "evidence delete by admin operator" on public.evidence_files;
+drop policy if exists "evidence delete by admin" on public.evidence_files;
 
 drop policy if exists "dividend records admin all" on public.dividend_records;
 drop policy if exists "dividend records investor own select" on public.dividend_records;
@@ -105,6 +106,7 @@ create policy "evidence delete by admin"
 drop policy if exists "evidence storage select by store role" on storage.objects;
 drop policy if exists "evidence storage insert by admin operator" on storage.objects;
 drop policy if exists "evidence storage delete by admin operator" on storage.objects;
+drop policy if exists "evidence storage delete by admin" on storage.objects;
 
 create policy "evidence storage select by store role"
   on storage.objects for select
