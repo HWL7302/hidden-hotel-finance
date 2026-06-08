@@ -1,5 +1,5 @@
 import { AccessDenied } from "@/components/AccessDenied";
-import { ModulePlaceholder } from "@/components/ModulePlaceholder";
+import { ReportExportManager } from "@/components/ReportExportManager";
 import { getDashboardContext } from "@/lib/dashboard-context";
 
 export default async function ReportsPage() {
@@ -10,9 +10,11 @@ export default async function ReportsPage() {
   }
 
   return (
-    <ModulePlaceholder
-      title="导出报表"
-      description="预留月度财务、投资人分红和审计报表入口；Phase 1 暂不实现 Excel 或 PDF 导出。"
+    <ReportExportManager
+      currentRole={context.currentRole}
+      userEmail={context.userEmail}
+      defaultStoreId={context.defaultStoreId}
+      storeLoadError={context.storeLoadError}
     />
   );
 }

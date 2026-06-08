@@ -25,13 +25,14 @@
 - Add dividend evidence upload and linking: TODO
 - Add monthly closing persistence, lock workflow, and detail pages
 - Add room/monthly rent ledger: completed in Room/Monthly Rent V1
+- Add Excel report export center: completed in Report Export V1
 - Add investor-only dashboard view
 
 ## Later Phases
 
 - Audit-log-backed locked month edits
 - Dividend calculation
-- Report export
 - Excel import
 - PDF export
+- Report printing, scheduled reports, and email delivery
 - Better analytics and charts

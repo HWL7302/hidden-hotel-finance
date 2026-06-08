@@ -109,3 +109,10 @@
 - Added room create/edit/delete for admins, room create/edit for operators, and read-only access for viewers.
 - Added monthly rent create/edit/delete for admins, create/edit for operators, and read-only access for viewers.
 - Kept the room/monthly rent ledger separate from income management. No income records are generated automatically.
+- Added the report export center V1.
+- Added Excel-only operating reports with summary, income details, expense details, and monthly summary sheets.
+- Added Excel-only investment reports with investor dividend summary, dividend records, and project operating overview sheets.
+- Added start-month and end-month range selection for report exports.
+- Added export size estimates and large-export protection at 5,000 and 10,000 records.
+- Added role-aware report visibility: admins can export operating and investment reports, operators can export operating reports, and viewers can export operating plus their own investment reports.
+- Kept PDF, printing, scheduled reports, email delivery, advanced filters, and chart export out of this version.
