@@ -99,6 +99,35 @@ function formatPercent(value: number) {
   return `${value.toFixed(2)}%`;
 }
 
+function formatAuditMonth(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function getAuditRetentionReminder(oldestCreatedAt: string | null) {
+  if (!oldestCreatedAt) {
+    return "";
+  }
+
+  const oldestDate = new Date(oldestCreatedAt);
+  if (Number.isNaN(oldestDate.getTime())) {
+    return "";
+  }
+
+  const now = new Date();
+  const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  const nextCleanupCutoff = new Date(
+    nextMonth.getFullYear(),
+    nextMonth.getMonth() - 12,
+    1
+  );
+
+  if (oldestDate >= nextCleanupCutoff) {
+    return "";
+  }
+
+  return `审计日志即将清理：${formatAuditMonth(nextCleanupCutoff)} 以前的日志将在下月自动清理。如需保留，请提前导出备份。`;
+}
+
 export function HomeDashboard({
   currentRole,
   defaultStoreId,
@@ -125,6 +154,7 @@ export function HomeDashboard({
   const [trendExpenses, setTrendExpenses] = useState<TrendExpenseRecord[]>([]);
   const [error, setError] = useState(storeLoadError);
   const [isLoading, setIsLoading] = useState(false);
+  const [auditRetentionReminder, setAuditRetentionReminder] = useState("");
 
   async function loadDashboard() {
     if (!defaultStoreId) {
@@ -202,7 +232,8 @@ export function HomeDashboard({
       monthlyDividendResult,
       paidDividendResult,
       trendIncomeResult,
-      trendExpenseResult
+      trendExpenseResult,
+      auditRetentionResult
     ] = await Promise.all([
       supabase
         .from("incomes")
@@ -237,7 +268,17 @@ export function HomeDashboard({
         .select("amount,included_in_monthly_cost,evidence_file,date")
         .eq("store_id", defaultStoreId)
         .gte("date", trendRange.start)
-        .lt("date", trendRange.end)
+        .lt("date", trendRange.end),
+      currentRole === "admin"
+        ? supabase.rpc("enforce_audit_log_retention").then(() =>
+            supabase
+              .from("audit_logs")
+              .select("created_at")
+              .eq("store_id", defaultStoreId)
+              .order("created_at", { ascending: true })
+              .limit(1)
+          )
+        : Promise.resolve({ data: [], error: null })
     ]);
 
     setIsLoading(false);
@@ -267,6 +308,14 @@ export function HomeDashboard({
     setPaidDividends((paidDividendResult.data ?? []) as DividendRecord[]);
     setTrendIncomes((trendIncomeResult.data ?? []) as TrendIncomeRecord[]);
     setTrendExpenses((trendExpenseResult.data ?? []) as TrendExpenseRecord[]);
+    setAuditRetentionReminder(
+      currentRole === "admin"
+        ? getAuditRetentionReminder(
+            (auditRetentionResult.data?.[0] as { created_at?: string } | undefined)
+              ?.created_at ?? null
+          )
+        : ""
+    );
   }
 
   useEffect(() => {
@@ -435,9 +484,14 @@ export function HomeDashboard({
     summary.expenseCount > 0 ||
     summary.incomeWithoutEvidenceCount > 0 ||
     summary.expenseWithoutEvidenceCount > 0 ||
-    summary.unpaidDividendCount > 0;
+    summary.unpaidDividendCount > 0 ||
+    auditRetentionReminder.length > 0;
   const visibleReminders =
-    currentRole === "operator" ? reminders.slice(0, -1) : reminders;
+    currentRole === "operator"
+      ? reminders.slice(0, -1)
+      : auditRetentionReminder
+        ? [...reminders, auditRetentionReminder]
+        : reminders;
 
   return (
     <section>

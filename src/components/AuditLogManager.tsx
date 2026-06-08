@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { MonthInput } from "@/components/DateInputs";
-import { createClient } from "@/lib/supabase-client";
 import type { AppRole } from "@/lib/permissions";
+import { createClient } from "@/lib/supabase-client";
 
 type AuditLogRecord = {
   id: string;
@@ -11,14 +11,48 @@ type AuditLogRecord = {
   user_role: string | null;
   action: string;
   target_type: string | null;
-  target_id: string | null;
-  target_name: string | null;
-  details: Record<string, unknown> | null;
-  table_name: string | null;
-  record_id: string | null;
-  reason: string | null;
+  operation_text: string | null;
   created_at: string;
 };
+
+const actionOptions = [
+  ["create", "新增"],
+  ["update", "编辑"],
+  ["delete", "删除"],
+  ["upload", "上传"],
+  ["download", "下载"],
+  ["export", "导出"],
+  ["lock", "锁定"],
+  ["unlock", "解锁"],
+  ["generate", "生成"],
+  ["refresh", "刷新"],
+  ["mark_paid", "标记已发放"],
+  ["mark_deferred", "标记暂缓"]
+] as const;
+
+const targetOptions = [
+  ["income", "收入"],
+  ["expense", "支出"],
+  ["voucher", "凭证"],
+  ["room", "房间"],
+  ["monthly_rent", "月租记录"],
+  ["investor", "投资人"],
+  ["investment_record", "投资记录"],
+  ["dividend", "分红"],
+  ["report", "报表"],
+  ["settlement", "月度结算"],
+  ["audit_log", "审计日志"]
+] as const;
+
+const roleLabels: Record<string, string> = {
+  admin: "管理员",
+  operator: "经营方",
+  viewer: "投资人",
+  system: "系统"
+};
+
+const actionLabels = Object.fromEntries(actionOptions);
+const targetLabels = Object.fromEntries(targetOptions);
 
 function currentMonthValue() {
   return new Date().toISOString().slice(0, 7);
@@ -32,40 +66,17 @@ function getMonthRange(month: string) {
   };
 }
 
-const actionLabels: Record<string, string> = {
-  create: "新增",
-  update: "编辑",
-  delete: "删除",
-  upload: "上传",
-  download: "下载",
-  export: "导出",
-  lock: "锁定",
-  unlock: "解锁",
-  generate: "生成",
-  refresh: "刷新",
-  mark_paid: "标记已发放",
-  mark_deferred: "标记暂缓"
-};
-
-const targetLabels: Record<string, string> = {
-  income: "收入",
-  expense: "支出",
-  voucher: "凭证",
-  room: "房间",
-  monthly_rent: "月租记录",
-  investor: "投资人",
-  investment_record: "投资记录",
-  dividend: "分红",
-  report: "报表",
-  settlement: "月度结算"
-};
-
-function formatDetails(details: Record<string, unknown> | null) {
-  if (!details) {
-    return "-";
+function fallbackOperationText(record: AuditLogRecord) {
+  if (record.operation_text?.trim()) {
+    return record.operation_text.trim();
   }
 
-  return JSON.stringify(details);
+  const action = actionLabels[record.action] ?? record.action;
+  const target = record.target_type
+    ? targetLabels[record.target_type] ?? record.target_type
+    : "";
+
+  return `${action}${target}` || "-";
 }
 
 export function AuditLogManager({
@@ -102,9 +113,7 @@ export function AuditLogManager({
 
     let query = supabase
       .from("audit_logs")
-      .select(
-        "id,user_email,user_role,action,target_type,target_id,target_name,details,table_name,record_id,reason,created_at"
-      )
+      .select("id,user_email,user_role,action,target_type,operation_text,created_at")
       .eq("store_id", defaultStoreId)
       .gte("created_at", range.start)
       .lt("created_at", range.end)
@@ -179,7 +188,7 @@ export function AuditLogManager({
               className="rounded-md border border-stone-300 bg-white px-3 py-2 text-sm"
             >
               <option value="all">全部</option>
-              {Object.entries(actionLabels).map(([value, label]) => (
+              {actionOptions.map(([value, label]) => (
                 <option key={value} value={value}>
                   {label}
                 </option>
@@ -194,7 +203,7 @@ export function AuditLogManager({
               className="rounded-md border border-stone-300 bg-white px-3 py-2 text-sm"
             >
               <option value="all">全部</option>
-              {Object.entries(targetLabels).map(([value, label]) => (
+              {targetOptions.map(([value, label]) => (
                 <option key={value} value={value}>
                   {label}
                 </option>
@@ -214,25 +223,22 @@ export function AuditLogManager({
           <table className="min-w-full divide-y divide-stone-200 text-sm">
             <thead className="bg-slate-50 text-left text-slate-600">
               <tr>
-                <th className="px-4 py-3 font-semibold">操作时间</th>
-                <th className="px-4 py-3 font-semibold">操作用户</th>
+                <th className="px-4 py-3 font-semibold">时间</th>
+                <th className="px-4 py-3 font-semibold">用户</th>
                 <th className="px-4 py-3 font-semibold">权限</th>
-                <th className="px-4 py-3 font-semibold">操作类型</th>
-                <th className="px-4 py-3 font-semibold">操作对象</th>
                 <th className="px-4 py-3 font-semibold">操作内容</th>
-                <th className="px-4 py-3 font-semibold">详情</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-stone-100">
               {isLoading ? (
                 <tr>
-                  <td className="px-4 py-6 text-stone-500" colSpan={7}>
+                  <td className="px-4 py-6 text-stone-500" colSpan={4}>
                     正在读取审计日志...
                   </td>
                 </tr>
               ) : records.length === 0 ? (
                 <tr>
-                  <td className="px-4 py-6 text-stone-500" colSpan={7}>
+                  <td className="px-4 py-6 text-stone-500" colSpan={4}>
                     当前筛选条件下暂无审计日志。
                   </td>
                 </tr>
@@ -243,27 +249,15 @@ export function AuditLogManager({
                       {new Date(record.created_at).toLocaleString("zh-CN")}
                     </td>
                     <td className="px-4 py-3 text-stone-700">
-                      {record.user_email || "-"}
+                      {record.user_email || "系统"}
                     </td>
                     <td className="px-4 py-3 text-stone-700">
-                      {record.user_role || "-"}
+                      {record.user_role
+                        ? roleLabels[record.user_role] ?? record.user_role
+                        : "-"}
                     </td>
-                    <td className="px-4 py-3 text-stone-700">
-                      {actionLabels[record.action] ?? record.action}
-                    </td>
-                    <td className="px-4 py-3 text-stone-700">
-                      {targetLabels[record.target_type ?? ""] ??
-                        record.target_type ??
-                        record.table_name ??
-                        "-"}
-                    </td>
-                    <td className="px-4 py-3 text-stone-700">
-                      {record.target_name || record.reason || "-"}
-                    </td>
-                    <td className="max-w-md px-4 py-3 text-stone-700">
-                      <div className="max-h-20 overflow-y-auto whitespace-pre-wrap break-words">
-                        {formatDetails(record.details)}
-                      </div>
+                    <td className="px-4 py-3 font-medium text-ink">
+                      {fallbackOperationText(record)}
                     </td>
                   </tr>
                 ))

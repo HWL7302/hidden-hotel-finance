@@ -25,7 +25,56 @@ type AuditTargetType =
   | "investment_record"
   | "dividend"
   | "report"
-  | "settlement";
+  | "settlement"
+  | "audit_log";
+
+const actionText: Record<AuditAction, string> = {
+  create: "新增",
+  update: "编辑",
+  delete: "删除",
+  upload: "上传",
+  download: "下载",
+  export: "导出",
+  lock: "锁定",
+  unlock: "解锁",
+  generate: "生成",
+  refresh: "刷新",
+  mark_paid: "标记已发放",
+  mark_deferred: "标记暂缓发放"
+};
+
+const targetText: Record<AuditTargetType, string> = {
+  income: "收入记录",
+  expense: "支出记录",
+  voucher: "凭证",
+  room: "房间",
+  monthly_rent: "月租记录",
+  investor: "投资人",
+  investment_record: "投资记录",
+  dividend: "分红",
+  report: "报表",
+  settlement: "月份",
+  audit_log: "审计日志"
+};
+
+function buildOperationText({
+  action,
+  targetType,
+  targetName,
+  operationText
+}: {
+  action: AuditAction;
+  targetType: AuditTargetType;
+  targetName?: string | null;
+  operationText?: string | null;
+}) {
+  if (operationText?.trim()) {
+    return operationText.trim();
+  }
+
+  const text = `${actionText[action]}${targetText[targetType]}`;
+  return targetName ? `${text}：${targetName}` : text;
+}
 
 export async function logAuditEvent({
   supabase,
@@ -33,9 +82,8 @@ export async function logAuditEvent({
   userRole,
   action,
   targetType,
-  targetId = null,
   targetName = null,
-  details = null,
+  operationText = null,
   isTestData = true
 }: {
   supabase: SupabaseClient;
@@ -46,6 +94,7 @@ export async function logAuditEvent({
   targetId?: string | null;
   targetName?: string | null;
   details?: Record<string, unknown> | null;
+  operationText?: string | null;
   isTestData?: boolean;
 }) {
   if (!storeId) {
@@ -64,9 +113,12 @@ export async function logAuditEvent({
       user_role: userRole,
       action,
       target_type: targetType,
-      target_id: targetId,
-      target_name: targetName,
-      details,
+      operation_text: buildOperationText({
+        action,
+        targetType,
+        targetName,
+        operationText
+      }),
       is_test_data: isTestData
     });
 

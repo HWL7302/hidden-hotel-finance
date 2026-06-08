@@ -6,10 +6,20 @@ alter table public.audit_logs
   add column if not exists user_email text,
   add column if not exists user_role text,
   add column if not exists target_type text,
+  add column if not exists operation_text text,
   add column if not exists target_id uuid,
   add column if not exists target_name text,
   add column if not exists details jsonb,
   add column if not exists is_test_data boolean not null default true;
+
+update public.audit_logs
+set operation_text = coalesce(
+  operation_text,
+  nullif(target_name, ''),
+  nullif(reason, ''),
+  trim(concat(action, ' ', coalesce(target_type, table_name, '')))
+)
+where operation_text is null;
 
 grant select, insert, delete on table public.audit_logs to authenticated;
 
@@ -138,5 +148,80 @@ $$;
 
 revoke all on function public.clear_development_test_data(text) from public;
 grant execute on function public.clear_development_test_data(text) to authenticated;
+
+create or replace function public.enforce_audit_log_retention()
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  target_store_id uuid;
+  retained_start date;
+  retained_end date;
+  deleted_count integer;
+begin
+  if auth.uid() is null or public.current_investor_permission_role() <> 'admin' then
+    raise exception 'Administrator access is required.';
+  end if;
+
+  target_store_id := public.current_profile_store_id();
+  if target_store_id is null then
+    select p.store_id into target_store_id
+    from public.current_investor_profile() p
+    limit 1;
+  end if;
+
+  if target_store_id is null then
+    raise exception 'The current administrator does not have a store.';
+  end if;
+
+  retained_start := (date_trunc('month', now())::date - interval '12 months')::date;
+  retained_end := date_trunc('month', now())::date;
+
+  delete from public.audit_logs
+  where store_id = target_store_id
+    and created_at < retained_start
+    and coalesce(operation_text, '') <> '系统自动清理审计日志';
+  get diagnostics deleted_count = row_count;
+
+  if deleted_count > 0 then
+    insert into public.audit_logs (
+      store_id,
+      user_id,
+      user_email,
+      user_role,
+      action,
+      target_type,
+      operation_text,
+      is_test_data
+    )
+    values (
+      target_store_id,
+      auth.uid(),
+      coalesce(auth.jwt() ->> 'email', 'system'),
+      'system',
+      'delete',
+      'audit_log',
+      format(
+        '系统自动清理审计日志：删除 %s 条，保留范围 %s ～ %s',
+        deleted_count,
+        to_char(retained_start, 'YYYY-MM'),
+        to_char(retained_end, 'YYYY-MM')
+      ),
+      false
+    );
+  end if;
+
+  return jsonb_build_object(
+    'deleted_count', deleted_count,
+    'retained_start', to_char(retained_start, 'YYYY-MM'),
+    'retained_end', to_char(retained_end, 'YYYY-MM')
+  );
+end;
+$$;
+
+revoke all on function public.enforce_audit_log_retention() from public;
+grant execute on function public.enforce_audit_log_retention() to authenticated;
 
 commit;
