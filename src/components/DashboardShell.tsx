@@ -26,7 +26,7 @@ export function DashboardShell({
   }
 
   return (
-    <div className="min-h-screen bg-paper">
+    <div className="app-background min-h-screen">
       <aside className="fixed inset-y-0 left-0 hidden w-64 border-r border-slate-200 bg-white px-5 py-6 lg:block">
         <div className="rounded-xl border border-slate-100 bg-paper px-4 py-4">
           <p className="text-xs font-semibold uppercase tracking-wide text-pine">
@@ -55,7 +55,7 @@ export function DashboardShell({
         </nav>
       </aside>
       <div className="lg:pl-64">
-        <header className="sticky top-0 z-10 border-b border-slate-200 bg-paper px-6 py-4">
+        <header className="sticky top-0 z-10 border-b border-slate-200 bg-transparent px-6 py-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-xs font-semibold text-slate-500">当前登录用户</p>

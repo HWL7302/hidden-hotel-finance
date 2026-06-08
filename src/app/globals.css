@@ -8,13 +8,29 @@
 
 body {
   margin: 0;
-  background: #f5f7f9;
+  background: linear-gradient(
+    180deg,
+    #f3efef 0%,
+    #eef0f0 45%,
+    #e8f2f5 100%
+  );
+  background-attachment: fixed;
   color: #2f2d4a;
   font-feature-settings: "tnum";
 }
 
 * {
   box-sizing: border-box;
+}
+
+.app-background {
+  background: linear-gradient(
+    180deg,
+    #f3efef 0%,
+    #eef0f0 45%,
+    #e8f2f5 100%
+  );
+  background-attachment: fixed;
 }
 
 @layer base {
