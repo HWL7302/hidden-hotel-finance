@@ -38,6 +38,10 @@ type InvestorRecord = {
   share_ratio: string | number | null;
 };
 
+type ExportInvestor = InvestorRecord & {
+  investor_ids: string[];
+};
+
 type InvestorProfile = {
   id: string;
   store_id: string;
@@ -187,13 +191,38 @@ function getTotalCount(counts: CountSummary, includeDividendCount: boolean) {
   );
 }
 
-function uniqueInvestorsById(records: InvestorRecord[]) {
-  const map = new Map<string, InvestorRecord>();
+function normalizeInvestorName(record: InvestorRecord) {
+  return (record.name || record.email || record.id).trim().toLowerCase();
+}
+
+function groupInvestorsForExport(records: InvestorRecord[]) {
+  const map = new Map<string, ExportInvestor>();
 
   for (const record of records) {
-    if (!map.has(record.id)) {
-      map.set(record.id, record);
+    const key = normalizeInvestorName(record);
+    const existing = map.get(key);
+
+    if (!existing) {
+      map.set(key, {
+        ...record,
+        id: key,
+        investment_amount: parseAmount(record.investment_amount),
+        share_ratio: parseAmount(record.share_ratio),
+        investor_ids: [record.id]
+      });
+      continue;
     }
+
+    if (!existing.investor_ids.includes(record.id)) {
+      existing.investor_ids.push(record.id);
+    }
+
+    existing.investment_amount = roundMoney(
+      parseAmount(existing.investment_amount) + parseAmount(record.investment_amount)
+    );
+    existing.share_ratio = roundMoney(
+      parseAmount(existing.share_ratio) + parseAmount(record.share_ratio)
+    );
   }
 
   return Array.from(map.values());
@@ -231,6 +260,10 @@ export function ReportExportManager({
   const canExportInvestment = currentRole === "admin" || currentRole === "viewer";
   const canSelectInvestor = currentRole === "admin";
   const effectiveStoreId = viewerInvestor?.store_id ?? defaultStoreId;
+  const investorOptions = useMemo(
+    () => groupInvestorsForExport(investors),
+    [investors]
+  );
 
   useEffect(() => {
     async function loadInvestors() {
@@ -385,7 +418,15 @@ export function ReportExportManager({
                 .lt("settlement_month", range.end);
 
               if (investorId !== "all") {
-                query = query.eq("investor_id", investorId);
+                const investorIds = getSelectedInvestors().flatMap(
+                  (investor) => investor.investor_ids
+                );
+
+                if (investorIds.length > 0) {
+                  query = query.in("investor_id", investorIds);
+                } else {
+                  query = query.eq("investor_id", investorId);
+                }
               }
 
               return query;
@@ -594,21 +635,26 @@ export function ReportExportManager({
 
   function getSelectedInvestors() {
     if (currentRole === "viewer") {
-      return viewerInvestor ? [viewerInvestor] : [];
+      return viewerInvestor
+        ? [
+            {
+              ...viewerInvestor,
+              investor_ids: [viewerInvestor.id]
+            }
+          ]
+        : [];
     }
 
     if (selectedInvestorId === "all") {
-      return uniqueInvestorsById(investors);
+      return investorOptions;
     }
 
-    return uniqueInvestorsById(
-      investors.filter((investor) => investor.id === selectedInvestorId)
-    );
+    return investorOptions.filter((investor) => investor.id === selectedInvestorId);
   }
 
   async function fetchInvestmentData(startMonth: string, endMonth: string) {
     const selectedInvestors = getSelectedInvestors();
-    const investorIds = selectedInvestors.map((investor) => investor.id);
+    const investorIds = selectedInvestors.flatMap((investor) => investor.investor_ids);
 
     if (investorIds.length === 0) {
       throw new Error("当前没有可导出的投资人数据。");
@@ -675,7 +721,7 @@ export function ReportExportManager({
     endMonth: string;
     incomes: IncomeRecord[];
     expenses: ExpenseRecord[];
-    selectedInvestors: InvestorRecord[];
+    selectedInvestors: ExportInvestor[];
     investmentRecords: InvestmentRecord[];
     dividendRecords: DividendRecord[];
     cumulativeDividends: DividendRecord[];
@@ -691,7 +737,7 @@ export function ReportExportManager({
       "投资收益汇总",
       selectedInvestors.map((investor) => {
         const investorInvestmentRecords = investmentRecords.filter(
-          (record) => record.investor_id === investor.id
+          (record) => investor.investor_ids.includes(record.investor_id)
         );
         const investorInvestment = sumAmounts(
           investorInvestmentRecords,
@@ -700,7 +746,7 @@ export function ReportExportManager({
         const effectiveInvestment =
           investorInvestment || parseAmount(investor.investment_amount);
         const investorDividends = dividendRecords.filter(
-          (record) => record.investor_id === investor.id
+          (record) => investor.investor_ids.includes(record.investor_id)
         );
         const displayName =
           investor.name === "当前投资人"
@@ -719,7 +765,9 @@ export function ReportExportManager({
           (record) => record.expected_amount
         );
         const cumulativeDividend = sumAmounts(
-          cumulativeDividends.filter((record) => record.investor_id === investor.id),
+          cumulativeDividends.filter((record) =>
+            investor.investor_ids.includes(record.investor_id)
+          ),
           (record) => record.paid_amount
         );
 
@@ -870,7 +918,7 @@ export function ReportExportManager({
                   className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-pine focus:ring-2 focus:ring-pine/20"
                 >
                   <option value="all">全部投资人</option>
-                  {investors.map((investor) => (
+                  {investorOptions.map((investor) => (
                     <option key={investor.id} value={investor.id}>
                       {investor.name}
                     </option>
