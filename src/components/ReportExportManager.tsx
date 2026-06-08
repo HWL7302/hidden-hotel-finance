@@ -220,9 +220,8 @@ function groupInvestorsForExport(records: InvestorRecord[]) {
     existing.investment_amount = roundMoney(
       parseAmount(existing.investment_amount) + parseAmount(record.investment_amount)
     );
-    existing.share_ratio = roundMoney(
-      parseAmount(existing.share_ratio) + parseAmount(record.share_ratio)
-    );
+    existing.share_ratio =
+      parseAmount(existing.share_ratio) + parseAmount(record.share_ratio);
   }
 
   return Array.from(map.values());
