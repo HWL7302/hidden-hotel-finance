@@ -5,6 +5,7 @@ import Link from "next/link";
 import { MonthInput } from "@/components/DateInputs";
 import { createSignedEvidenceUrl } from "@/lib/evidence-client";
 import { createClient } from "@/lib/supabase-client";
+import { logAuditEvent } from "@/lib/audit-client";
 import { canPerform, type AppRole } from "@/lib/permissions";
 
 type EvidenceType = "income" | "expense" | "other";
@@ -80,6 +81,7 @@ export function EvidenceManager({
   const [error, setError] = useState(storeLoadError);
   const [notice, setNotice] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isBatchDownloading, setIsBatchDownloading] = useState(false);
 
   async function loadRecords() {
     if (!defaultStoreId) {
@@ -175,7 +177,89 @@ export function EvidenceManager({
     }
 
     setNotice("凭证已删除。");
+    await logAuditEvent({
+      supabase,
+      storeId: defaultStoreId,
+      userRole: currentRole,
+      action: "delete",
+      targetType: "voucher",
+      targetId: record.id,
+      targetName: record.file_name,
+      details: {
+        evidence_type: record.evidence_type,
+        related_table: record.related_table,
+        related_record_id: record.related_record_id
+      }
+    });
     await loadRecords();
+  }
+
+  async function handleBatchDownload() {
+    setError("");
+    setNotice("");
+
+    if (!canBatchDownload) {
+      setError("当前账号无权批量下载凭证。");
+      return;
+    }
+
+    if (records.length === 0) {
+      setError("当前筛选条件下没有可下载的凭证。");
+      return;
+    }
+
+    setIsBatchDownloading(true);
+
+    try {
+      const { default: JSZip } = await import("jszip");
+      const zip = new JSZip();
+
+      for (const [index, record] of records.entries()) {
+        const signedUrl = await createSignedEvidenceUrl(supabase, record.id);
+        const response = await fetch(signedUrl);
+
+        if (!response.ok) {
+          throw new Error(`凭证「${record.file_name}」下载失败。`);
+        }
+
+        const blob = await response.blob();
+        zip.file(`${String(index + 1).padStart(3, "0")}_${record.file_name}`, blob);
+      }
+
+      const zipBlob = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(zipBlob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `凭证_${month}.zip`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+
+      await logAuditEvent({
+        supabase,
+        storeId: defaultStoreId,
+        userRole: currentRole,
+        action: "download",
+        targetType: "voucher",
+        targetName: `凭证_${month}.zip`,
+        details: {
+          month,
+          evidence_type: typeFilter,
+          file_count: records.length
+        }
+      });
+
+      setNotice(`已打包下载 ${records.length} 个凭证文件。`);
+    } catch (downloadError) {
+      setError(
+        downloadError instanceof Error
+          ? downloadError.message
+          : "批量下载凭证失败。"
+      );
+    } finally {
+      setIsBatchDownloading(false);
+    }
   }
 
   return (
@@ -225,10 +309,11 @@ export function EvidenceManager({
           {canBatchDownload ? (
             <button
               type="button"
-              disabled
-              className="rounded-md border border-stone-300 px-4 py-2 text-sm font-medium text-stone-500 disabled:cursor-not-allowed disabled:opacity-70"
+              onClick={() => void handleBatchDownload()}
+              disabled={isBatchDownloading || isLoading}
+              className="rounded-md border border-stone-300 px-4 py-2 text-sm font-medium text-ink transition hover:border-pine hover:text-pine disabled:cursor-not-allowed disabled:opacity-60"
             >
-              批量下载（预留）
+              {isBatchDownloading ? "打包中..." : "批量下载"}
             </button>
           ) : null}
         </div>

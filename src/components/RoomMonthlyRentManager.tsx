@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { DateInput, MonthInput } from "@/components/DateInputs";
 import { createClient } from "@/lib/supabase-client";
+import { logAuditEvent } from "@/lib/audit-client";
 import type { AppRole } from "@/lib/permissions";
 
 type RoomStatus =
@@ -269,6 +270,19 @@ export function RoomMonthlyRentManager({
     ? activeRentByRoom.get(selectedRoomId) ?? null
     : null;
 
+  const monthlyRentReceivable = activeRentRecords.reduce(
+    (sum, record) => sum + parseAmount(record.monthly_rent),
+    0
+  );
+  const statsRange = getMonthRange(month);
+  const monthlyDepositAmount = rentRecords.reduce((sum, record) => {
+    if (record.start_date >= statsRange.start && record.start_date < statsRange.end) {
+      return sum + parseAmount(record.deposit);
+    }
+
+    return sum;
+  }, 0);
+
   const stats = [
     { label: "房间总数", value: String(rooms.length) },
     { label: "当前月租房间数", value: String(activeRentRecords.length) },
@@ -280,12 +294,15 @@ export function RoomMonthlyRentManager({
     },
     {
       label: "本月月租应收金额",
-      value: `${formatMoney(
-        activeRentRecords.reduce(
-          (sum, record) => sum + parseAmount(record.monthly_rent),
-          0
-        )
-      )} RMB`
+      value: `${formatMoney(monthlyRentReceivable)} RMB`
+    },
+    {
+      label: "本月押金收取金额",
+      value: `${formatMoney(monthlyDepositAmount)} RMB`
+    },
+    {
+      label: "本月合计收款金额",
+      value: `${formatMoney(monthlyRentReceivable + monthlyDepositAmount)} RMB`
     }
   ];
 
@@ -400,6 +417,20 @@ export function RoomMonthlyRentManager({
     }
 
     setNotice(editingRoomId ? "房间信息已更新。" : "房间已新增。");
+    await logAuditEvent({
+      supabase,
+      storeId: defaultStoreId,
+      userRole: currentRole,
+      action: editingRoomId ? "update" : "create",
+      targetType: "room",
+      targetId: editingRoomId,
+      targetName: payload.room_number,
+      details: {
+        room_number: payload.room_number,
+        management_status: payload.management_status
+      }
+    });
+
     resetRoomForm();
     await loadData();
   }
@@ -504,6 +535,35 @@ export function RoomMonthlyRentManager({
     }
 
     setNotice(editingRentId ? "月租记录已更新。" : "月租记录已新增。");
+    if (payload.status === "active") {
+      const { error: roomStatusError } = await supabase
+        .from("rooms")
+        .update({ management_status: "monthly_rented" })
+        .eq("id", payload.room_id)
+        .eq("store_id", defaultStoreId);
+
+      if (roomStatusError) {
+        setError(roomStatusError.message);
+        return;
+      }
+    }
+
+    await logAuditEvent({
+      supabase,
+      storeId: defaultStoreId,
+      userRole: currentRole,
+      action: editingRentId ? "update" : "create",
+      targetType: "monthly_rent",
+      targetId: editingRentId,
+      targetName: payload.tenant_name,
+      details: {
+        room_id: payload.room_id,
+        status: payload.status,
+        monthly_rent: payload.monthly_rent,
+        deposit: payload.deposit
+      }
+    });
+
     setSelectedRoomId(rentForm.roomId);
     resetRentForm();
     await loadData();
@@ -562,13 +622,13 @@ export function RoomMonthlyRentManager({
         </p>
       ) : null}
 
-      {!canManage ? (
+      {false ? (
         <p className="mt-5 rounded-md border border-slate-200 bg-white px-4 py-3 text-sm text-stone-600">
           当前角色为只读模式，可以查看房间和月租台账，不能新增、编辑或删除。
         </p>
       ) : null}
 
-      <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {stats.map((card) => (
           <div
             key={card.label}

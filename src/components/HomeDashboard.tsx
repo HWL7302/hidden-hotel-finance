@@ -436,6 +436,8 @@ export function HomeDashboard({
     summary.incomeWithoutEvidenceCount > 0 ||
     summary.expenseWithoutEvidenceCount > 0 ||
     summary.unpaidDividendCount > 0;
+  const visibleReminders =
+    currentRole === "operator" ? reminders.slice(0, -1) : reminders;
 
   return (
     <section>
@@ -552,12 +554,12 @@ export function HomeDashboard({
         </div>
       ) : null}
 
-      {currentRole === "admin" ? (
+      {currentRole === "admin" || currentRole === "operator" ? (
         <div className="mt-6 rounded-xl border border-slate-200 bg-white p-5 shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
           <h3 className="text-lg font-semibold text-ink">经营提醒</h3>
           {hasReminder ? (
             <ul className="mt-4 grid gap-3 text-sm text-stone-700 sm:grid-cols-2 xl:grid-cols-3">
-              {reminders.map((item) => (
+              {visibleReminders.map((item) => (
                 <li key={item} className="rounded-lg bg-slate-50 px-3 py-2">
                   {item}
                 </li>

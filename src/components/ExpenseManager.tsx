@@ -10,6 +10,7 @@ import {
   createSignedEvidenceUrl,
   uploadEvidenceForRecord
 } from "@/lib/evidence-client";
+import { logAuditEvent } from "@/lib/audit-client";
 import {
   expenseCategoryOptions,
   getExpenseCategoryLabel,
@@ -340,7 +341,7 @@ export function ExpenseManager({
 
     if (evidenceFile) {
       try {
-        await uploadEvidenceForRecord({
+        const evidenceId = await uploadEvidenceForRecord({
           supabase,
           file: evidenceFile,
           storeId: defaultStoreId,
@@ -348,6 +349,16 @@ export function ExpenseManager({
           evidenceType: "expense",
           relatedTable: "expenses",
           relatedRecordId: result.data.id
+        });
+        await logAuditEvent({
+          supabase,
+          storeId: defaultStoreId,
+          userRole: currentRole,
+          action: "upload",
+          targetType: "voucher",
+          targetId: evidenceId,
+          targetName: evidenceFile.name,
+          details: { related_table: "expenses", related_record_id: result.data.id }
         });
       } catch (uploadError) {
         setIsSaving(false);
@@ -360,6 +371,24 @@ export function ExpenseManager({
         return;
       }
     }
+
+    await logAuditEvent({
+      supabase,
+      storeId: defaultStoreId,
+      userRole: currentRole,
+      action: editingId ? "update" : "create",
+      targetType: "expense",
+      targetId: result.data.id,
+      targetName: getExpenseCategoryLabel(payload.category),
+      details: {
+        date: payload.date,
+        category: payload.category,
+        amount: payload.amount,
+        payee: payload.payee,
+        payment_method: payload.payment_method,
+        included_in_monthly_cost: payload.included_in_monthly_cost
+      }
+    });
 
     setIsSaving(false);
     setNotice(editingId ? "支出记录已更新。" : "支出记录已新增。");
@@ -398,6 +427,17 @@ export function ExpenseManager({
       setError(deleteError.message);
       return;
     }
+
+    await logAuditEvent({
+      supabase,
+      storeId: defaultStoreId,
+      userRole: currentRole,
+      action: "delete",
+      targetType: "expense",
+      targetId: expense.id,
+      targetName: getExpenseCategoryLabel(expense.category),
+      details: { date: expense.date, amount: expense.amount }
+    });
 
     setNotice("支出记录已删除。");
     await loadExpenses();

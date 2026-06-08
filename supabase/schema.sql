@@ -259,12 +259,19 @@ create table public.audit_logs (
   id uuid primary key default gen_random_uuid(),
   store_id uuid not null references public.stores(id),
   user_id uuid references auth.users(id),
-  action public.audit_action not null,
-  table_name text not null,
+  user_email text,
+  user_role text,
+  action text not null,
+  target_type text,
+  target_id uuid,
+  target_name text,
+  details jsonb,
+  table_name text,
   record_id uuid,
   old_value jsonb,
   new_value jsonb,
   reason text,
+  is_test_data boolean not null default true,
   created_at timestamptz not null default now()
 );
 
@@ -480,6 +487,7 @@ grant select, insert, update, delete on table public.investment_records to authe
 grant select, insert, update on table public.monthly_closings to authenticated;
 grant select, insert, update, delete on table public.dividend_records to authenticated;
 grant select, insert, delete on table public.evidence_files to authenticated;
+grant select, insert, delete on table public.audit_logs to authenticated;
 
 create policy "profile select own"
   on public.profiles for select
@@ -925,6 +933,55 @@ create policy "evidence storage delete by admin"
     and (storage.foldername(name))[1] = public.current_profile_store_id()::text
   );
 
+create policy "audit logs select by admin"
+  on public.audit_logs for select
+  to authenticated
+  using (
+    auth.uid() is not null
+    and public.current_investor_permission_role() = 'admin'
+    and (
+      public.current_profile_store_id() = store_id
+      or exists (
+        select 1
+        from public.current_investor_profile() p
+        where p.store_id = audit_logs.store_id
+      )
+    )
+  );
+
+create policy "audit logs insert by signed in role"
+  on public.audit_logs for insert
+  to authenticated
+  with check (
+    auth.uid() is not null
+    and public.current_investor_permission_role() in ('admin', 'operator', 'viewer')
+    and (
+      public.current_profile_store_id() = store_id
+      or exists (
+        select 1
+        from public.current_investor_profile() p
+        where p.store_id = audit_logs.store_id
+      )
+    )
+  );
+
+create policy "audit logs delete test data by admin"
+  on public.audit_logs for delete
+  to authenticated
+  using (
+    auth.uid() is not null
+    and is_test_data = true
+    and public.current_investor_permission_role() = 'admin'
+    and (
+      public.current_profile_store_id() = store_id
+      or exists (
+        select 1
+        from public.current_investor_profile() p
+        where p.store_id = audit_logs.store_id
+      )
+    )
+  );
+
 create or replace function public.clear_development_test_data(
   confirmation_text text
 )
@@ -937,9 +994,13 @@ declare
   target_store_id uuid;
   deleted_incomes integer;
   deleted_expenses integer;
+  deleted_dividend_records integer;
+  deleted_rooms integer;
+  deleted_monthly_rent_records integer;
   deleted_evidence_files integer;
+  deleted_audit_logs integer;
 begin
-  if auth.uid() is null or public.current_profile_role() <> 'admin' then
+  if auth.uid() is null or public.current_investor_permission_role() <> 'admin' then
     raise exception 'Administrator access is required.';
   end if;
 
@@ -949,8 +1010,26 @@ begin
 
   target_store_id := public.current_profile_store_id();
   if target_store_id is null then
+    select p.store_id into target_store_id
+    from public.current_investor_profile() p
+    limit 1;
+  end if;
+
+  if target_store_id is null then
     raise exception 'The current administrator does not have a store.';
   end if;
+
+  delete from public.audit_logs where store_id = target_store_id and is_test_data = true;
+  get diagnostics deleted_audit_logs = row_count;
+
+  delete from public.dividend_records where store_id = target_store_id;
+  get diagnostics deleted_dividend_records = row_count;
+
+  delete from public.monthly_rent_records where store_id = target_store_id;
+  get diagnostics deleted_monthly_rent_records = row_count;
+
+  delete from public.rooms where store_id = target_store_id;
+  get diagnostics deleted_rooms = row_count;
 
   delete from public.incomes where store_id = target_store_id;
   get diagnostics deleted_incomes = row_count;
@@ -964,7 +1043,11 @@ begin
   return jsonb_build_object(
     'deleted_incomes', deleted_incomes,
     'deleted_expenses', deleted_expenses,
-    'deleted_evidence_files', deleted_evidence_files
+    'deleted_dividend_records', deleted_dividend_records,
+    'deleted_rooms', deleted_rooms,
+    'deleted_monthly_rent_records', deleted_monthly_rent_records,
+    'deleted_evidence_files', deleted_evidence_files,
+    'deleted_audit_logs', deleted_audit_logs
   );
 end;
 $$;

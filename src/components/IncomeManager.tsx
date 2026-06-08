@@ -10,6 +10,7 @@ import {
   createSignedEvidenceUrl,
   uploadEvidenceForRecord
 } from "@/lib/evidence-client";
+import { logAuditEvent } from "@/lib/audit-client";
 import {
   getIncomeSourceLabel,
   incomeSourceOptions
@@ -389,7 +390,7 @@ export function IncomeManager({
 
     if (evidenceFile) {
       try {
-        await uploadEvidenceForRecord({
+        const evidenceId = await uploadEvidenceForRecord({
           supabase,
           file: evidenceFile,
           storeId: defaultStoreId,
@@ -397,6 +398,16 @@ export function IncomeManager({
           evidenceType: "income",
           relatedTable: "incomes",
           relatedRecordId: result.data.id
+        });
+        await logAuditEvent({
+          supabase,
+          storeId: defaultStoreId,
+          userRole: currentRole,
+          action: "upload",
+          targetType: "voucher",
+          targetId: evidenceId,
+          targetName: evidenceFile.name,
+          details: { related_table: "incomes", related_record_id: result.data.id }
         });
       } catch (uploadError) {
         setIsSaving(false);
@@ -409,6 +420,24 @@ export function IncomeManager({
         return;
       }
     }
+
+    await logAuditEvent({
+      supabase,
+      storeId: defaultStoreId,
+      userRole: currentRole,
+      action: editingId ? "update" : "create",
+      targetType: "income",
+      targetId: result.data.id,
+      targetName: getIncomeSourceLabel(payload.source),
+      details: {
+        date: payload.date,
+        source: payload.source,
+        gross_amount: payload.gross_amount,
+        fee_amount: payload.fee_amount,
+        net_amount: payload.net_amount,
+        settlement_period: payload.settlement_period
+      }
+    });
 
     setIsSaving(false);
     setNotice(editingId ? "收入记录已更新。" : "收入记录已新增。");
@@ -447,6 +476,17 @@ export function IncomeManager({
       setError(deleteError.message);
       return;
     }
+
+    await logAuditEvent({
+      supabase,
+      storeId: defaultStoreId,
+      userRole: currentRole,
+      action: "delete",
+      targetType: "income",
+      targetId: income.id,
+      targetName: getIncomeSourceLabel(income.source),
+      details: { date: income.date, net_amount: income.net_amount }
+    });
 
     setNotice("收入记录已删除。");
     await loadIncomes();
