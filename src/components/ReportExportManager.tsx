@@ -135,6 +135,10 @@ function roundMoney(value: number) {
   return Math.round(value * 100) / 100;
 }
 
+function roundDisplayedMoney(value: string | number | null | undefined) {
+  return Math.round(parseAmount(value));
+}
+
 function sumAmounts<T>(
   records: T[],
   read: (record: T) => string | number | null | undefined
@@ -775,10 +779,10 @@ export function ReportExportManager({
           投资金额: effectiveInvestment,
           当前持股比例: `${(parseAmount(investor.share_ratio) * 100).toFixed(2)}%`,
           区间净利润: totalNetProfit,
-          区间应分红: expectedDividend,
-          区间已发放分红: paidDividend,
-          区间待发放分红: unpaidDividend,
-          累计分红: cumulativeDividend,
+          区间应分红: roundDisplayedMoney(expectedDividend),
+          区间已发放分红: roundDisplayedMoney(paidDividend),
+          区间待发放分红: roundDisplayedMoney(unpaidDividend),
+          累计分红: roundDisplayedMoney(cumulativeDividend),
           回本进度:
             effectiveInvestment > 0
               ? `${((cumulativeDividend / effectiveInvestment) * 100).toFixed(2)}%`
@@ -792,8 +796,8 @@ export function ReportExportManager({
       dividendRecords.map((record) => ({
         投资人: record.investor_name,
         月份: record.settlement_month.slice(0, 7),
-        应分红金额: parseAmount(record.expected_amount),
-        实发金额: parseAmount(record.paid_amount),
+        应分红金额: roundDisplayedMoney(record.expected_amount),
+        实发金额: roundDisplayedMoney(record.paid_amount),
         状态: dividendStatusLabels[record.status],
         发放日期: record.paid_date ?? ""
       }))
