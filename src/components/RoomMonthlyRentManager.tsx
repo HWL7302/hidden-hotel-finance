@@ -161,6 +161,7 @@ export function RoomMonthlyRentManager({
   const supabase = useMemo(() => createClient(), []);
   const canManage = currentRole === "admin" || currentRole === "operator";
   const canDelete = currentRole === "admin";
+  const showActionColumn = canManage || canDelete;
   const [rooms, setRooms] = useState<RoomRecord[]>([]);
   const [rentRecords, setRentRecords] = useState<MonthlyRentRecord[]>([]);
   const [roomForm, setRoomForm] = useState<RoomFormState>(emptyRoomForm);
@@ -607,7 +608,11 @@ export function RoomMonthlyRentManager({
         </div>
       ) : null}
 
-      <div className="mt-6 grid gap-6 xl:grid-cols-[420px_1fr]">
+      <div
+        className={`mt-6 grid gap-6 ${
+          canManage ? "xl:grid-cols-[420px_1fr]" : "grid-cols-1"
+        }`}
+      >
         {canManage ? (
           <form
             onSubmit={handleRoomSubmit}
@@ -734,19 +739,25 @@ export function RoomMonthlyRentManager({
                   <TableHead>入住开始日</TableHead>
                   <TableHead>预计结束日</TableHead>
                   <TableHead>备注</TableHead>
-                  {canManage || canDelete ? <TableHead>操作</TableHead> : null}
+                  {showActionColumn ? <TableHead>操作</TableHead> : null}
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
                 {isLoading ? (
                   <tr>
-                    <td className="px-4 py-6 text-stone-500" colSpan={9}>
+                    <td
+                      className="px-4 py-6 text-stone-500"
+                      colSpan={showActionColumn ? 9 : 8}
+                    >
                       正在读取房间数据...
                     </td>
                   </tr>
                 ) : filteredRooms.length === 0 ? (
                   <tr>
-                    <td className="px-4 py-6 text-stone-500" colSpan={9}>
+                    <td
+                      className="px-4 py-6 text-stone-500"
+                      colSpan={showActionColumn ? 9 : 8}
+                    >
                       当前没有符合条件的房间记录。
                     </td>
                   </tr>
@@ -778,7 +789,7 @@ export function RoomMonthlyRentManager({
                             {room.notes || "-"}
                           </div>
                         </td>
-                        {canManage || canDelete ? (
+                        {showActionColumn ? (
                           <td className="whitespace-nowrap px-4 py-3">
                             <div className="flex gap-2">
                               {canManage ? (
@@ -818,7 +829,11 @@ export function RoomMonthlyRentManager({
         </div>
       </div>
 
-      <div className="mt-6 grid gap-6 xl:grid-cols-[420px_1fr]">
+      <div
+        className={`mt-6 grid gap-6 ${
+          canManage ? "xl:grid-cols-[420px_1fr]" : "grid-cols-1"
+        }`}
+      >
         {canManage ? (
           <form
             onSubmit={handleRentSubmit}
@@ -1022,19 +1037,25 @@ export function RoomMonthlyRentManager({
                   <TableHead>状态</TableHead>
                   <TableHead>押金</TableHead>
                   <TableHead>备注</TableHead>
-                  {canManage || canDelete ? <TableHead>操作</TableHead> : null}
+                  {showActionColumn ? <TableHead>操作</TableHead> : null}
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
                 {isLoading ? (
                   <tr>
-                    <td className="px-4 py-6 text-stone-500" colSpan={10}>
+                    <td
+                      className="px-4 py-6 text-stone-500"
+                      colSpan={showActionColumn ? 10 : 9}
+                    >
                       正在读取月租记录...
                     </td>
                   </tr>
                 ) : filteredRentRecords.length === 0 ? (
                   <tr>
-                    <td className="px-4 py-6 text-stone-500" colSpan={10}>
+                    <td
+                      className="px-4 py-6 text-stone-500"
+                      colSpan={showActionColumn ? 10 : 9}
+                    >
                       当前月份暂无符合条件的月租记录。
                     </td>
                   </tr>
@@ -1057,7 +1078,7 @@ export function RoomMonthlyRentManager({
                             {record.notes || "-"}
                           </div>
                         </td>
-                        {canManage || canDelete ? (
+                        {showActionColumn ? (
                           <td className="whitespace-nowrap px-4 py-3">
                             <div className="flex gap-2">
                               {canManage ? (
