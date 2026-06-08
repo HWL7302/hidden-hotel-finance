@@ -9,7 +9,8 @@ The database is hosted in Supabase Postgres. The schema is stored in `supabase/s
 - `profiles`: application profiles linked to Supabase Auth users.
 - `incomes`: income records.
 - `expenses`: expense records.
-- `rooms`: long-term room and monthly rental records.
+- `rooms`: room ledger records plus legacy long-term room fields.
+- `monthly_rent_records`: monthly tenant ledger records linked to `rooms`.
 - `investors`: investor records.
 - `investment_records`: investor capital contribution and share-change records.
 - `monthly_closings`: monthly financial closing records.
@@ -162,6 +163,41 @@ Monthly net profit is calculated with the same rules as Monthly Closing V1:
 
 V1 does not upload dividend evidence yet. `receipt_id` is reserved for future
 linking to `evidence_files`.
+
+## Room And Monthly Rent Ledger V1
+
+The room/monthly rent module is an operating ledger. It does not automatically
+write income records. Income remains entered separately in Income Management.
+
+The existing `rooms` table keeps legacy long-stay columns and now also stores
+room-ledger fields:
+
+- `room_number`
+- `room_type`
+- `management_status`: `vacant`, `monthly_rented`, `short_term`,
+  `maintenance`, or `inactive`
+- `notes`
+
+The `monthly_rent_records` table stores monthly tenant records:
+
+- `store_id`
+- `room_id`
+- `tenant_name`
+- `tenant_contact`
+- `monthly_rent`
+- `deposit`
+- `start_date`
+- `end_date`
+- `status`: `active`, `ended`, `paused`, or `overdue`
+- `notes`
+
+One room can have many historical monthly rent records. Current monthly rent
+statistics use records where `status = 'active'` and the selected month falls
+within `start_date` and `end_date`.
+
+Admin users can create, edit, and delete rooms and monthly rent records.
+Operator users can create and edit rooms and monthly rent records, but cannot
+delete them. Viewers can only read the ledger.
 
 ## Roles
 

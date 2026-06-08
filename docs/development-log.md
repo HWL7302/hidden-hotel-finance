@@ -97,3 +97,15 @@
 - Wired investor payback progress to paid `dividend_records` totals by `investor_id`.
 - Locked Next.js and `eslint-config-next` to `15.3.2` after `15.5.18` repeatedly corrupted the dev React Client Manifest on Windows.
 - Replaced the dev script with `scripts/dev-server.mjs`, which clears `.next` before starting Next.js.
+
+## 2026-06-08
+
+- Added the room/monthly rent ledger V1.
+- Added `supabase/phase-7-rooms-monthly-rent.sql`.
+- Extended the legacy `rooms` table with room-ledger fields: `room_type`, `management_status`, and `notes`.
+- Added `monthly_rent_records` for tenant, contact, monthly rent, deposit, date range, status, and notes.
+- Replaced the room/monthly rent placeholder with a working page.
+- Added room summary cards, room status filtering, month filtering, selected-room current rent display, and monthly rent status filtering.
+- Added room create/edit/delete for admins, room create/edit for operators, and read-only access for viewers.
+- Added monthly rent create/edit/delete for admins, create/edit for operators, and read-only access for viewers.
+- Kept the room/monthly rent ledger separate from income management. No income records are generated automatically.
