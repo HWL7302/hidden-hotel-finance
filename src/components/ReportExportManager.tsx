@@ -31,8 +31,16 @@ type ExpenseRecord = {
 
 type InvestorRecord = {
   id: string;
+  store_id?: string | null;
   name: string;
   email: string | null;
+  investment_amount: string | number | null;
+  share_ratio: string | number | null;
+};
+
+type InvestorProfile = {
+  id: string;
+  store_id: string;
   investment_amount: string | number | null;
   share_ratio: string | number | null;
 };
@@ -61,6 +69,12 @@ type CountSummary = {
 };
 
 type ReportType = "operation" | "investment";
+
+const emptyCounts: CountSummary = {
+  incomeCount: 0,
+  expenseCount: 0,
+  dividendCount: 0
+};
 
 const dividendStatusLabels: Record<DividendStatus, string> = {
   unpaid: "未发放",
@@ -131,12 +145,58 @@ function appendSheet(
   sheetName: string,
   rows: Record<string, string | number | null>[]
 ) {
-  const worksheet = XLSX.utils.json_to_sheet(rows);
+  const worksheet = XLSX.utils.json_to_sheet(rows, { skipHeader: false });
+  XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+}
+
+function appendHorizontalSummarySheet({
+  workbook,
+  sheetName,
+  startMonth,
+  endMonth,
+  totalIncome,
+  totalExpense,
+  totalNetProfit
+}: {
+  workbook: XLSX.WorkBook;
+  sheetName: string;
+  startMonth: string;
+  endMonth: string;
+  totalIncome: number;
+  totalExpense: number;
+  totalNetProfit: number;
+}) {
+  const worksheet = XLSX.utils.aoa_to_sheet([
+    [`导出期间：${startMonth} ～ ${endMonth}`],
+    [],
+    ["项目", "总收入", "总支出", "总净利润"],
+    ["金额", totalIncome, totalExpense, totalNetProfit]
+  ]);
   XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
 }
 
 function downloadWorkbook(workbook: XLSX.WorkBook, fileName: string) {
   XLSX.writeFile(workbook, fileName, { compression: true });
+}
+
+function getTotalCount(counts: CountSummary, includeDividendCount: boolean) {
+  return (
+    counts.incomeCount +
+    counts.expenseCount +
+    (includeDividendCount ? counts.dividendCount : 0)
+  );
+}
+
+function uniqueInvestorsById(records: InvestorRecord[]) {
+  const map = new Map<string, InvestorRecord>();
+
+  for (const record of records) {
+    if (!map.has(record.id)) {
+      map.set(record.id, record);
+    }
+  }
+
+  return Array.from(map.values());
 }
 
 export function ReportExportManager({
@@ -157,46 +217,76 @@ export function ReportExportManager({
   const [investmentEndMonth, setInvestmentEndMonth] = useState(currentMonthValue);
   const [investors, setInvestors] = useState<InvestorRecord[]>([]);
   const [selectedInvestorId, setSelectedInvestorId] = useState("all");
+  const [viewerInvestor, setViewerInvestor] = useState<InvestorRecord | null>(null);
   const [error, setError] = useState(storeLoadError);
   const [notice, setNotice] = useState("");
   const [isLoadingInvestors, setIsLoadingInvestors] = useState(false);
   const [isExportingOperation, setIsExportingOperation] = useState(false);
   const [isExportingInvestment, setIsExportingInvestment] = useState(false);
-  const [operationCount, setOperationCount] = useState<CountSummary>({
-    incomeCount: 0,
-    expenseCount: 0,
-    dividendCount: 0
-  });
-  const [investmentCount, setInvestmentCount] = useState<CountSummary>({
-    incomeCount: 0,
-    expenseCount: 0,
-    dividendCount: 0
-  });
+  const [operationCount, setOperationCount] = useState<CountSummary>(emptyCounts);
+  const [investmentCount, setInvestmentCount] = useState<CountSummary>(emptyCounts);
 
   const canExportOperation =
     currentRole === "admin" || currentRole === "operator" || currentRole === "viewer";
   const canExportInvestment = currentRole === "admin" || currentRole === "viewer";
   const canSelectInvestor = currentRole === "admin";
+  const effectiveStoreId = viewerInvestor?.store_id ?? defaultStoreId;
 
   useEffect(() => {
     async function loadInvestors() {
-      if (!defaultStoreId || !canExportInvestment) {
+      if (!canExportInvestment) {
         return;
       }
 
       setIsLoadingInvestors(true);
-      let query = supabase
+
+      if (currentRole === "viewer") {
+        const { data, error: profileError } = await supabase
+          .rpc("current_investor_profile")
+          .maybeSingle();
+
+        setIsLoadingInvestors(false);
+
+        if (profileError) {
+          setError(profileError.message);
+          return;
+        }
+
+        const profile = data as InvestorProfile | null;
+
+        if (!profile?.id) {
+          setViewerInvestor(null);
+          setSelectedInvestorId("");
+          return;
+        }
+
+        const fallbackInvestor: InvestorRecord = {
+          id: profile.id,
+          store_id: profile.store_id,
+          name: "当前投资人",
+          email: userEmail,
+          investment_amount: profile.investment_amount,
+          share_ratio: profile.share_ratio
+        };
+
+        setViewerInvestor(fallbackInvestor);
+        setInvestors([fallbackInvestor]);
+        setSelectedInvestorId(profile.id);
+        return;
+      }
+
+      if (!defaultStoreId) {
+        setIsLoadingInvestors(false);
+        return;
+      }
+
+      const { data, error: loadError } = await supabase
         .from("investors")
         .select("id,name,email,investment_amount,share_ratio")
         .eq("store_id", defaultStoreId)
         .eq("is_active", true)
         .order("created_at", { ascending: true });
 
-      if (currentRole === "viewer") {
-        query = query.eq("email", userEmail.trim().toLowerCase());
-      }
-
-      const { data, error: loadError } = await query;
       setIsLoadingInvestors(false);
 
       if (loadError) {
@@ -204,12 +294,8 @@ export function ReportExportManager({
         return;
       }
 
-      const loadedInvestors = (data ?? []) as InvestorRecord[];
-      setInvestors(loadedInvestors);
-
-      if (currentRole === "viewer") {
-        setSelectedInvestorId(loadedInvestors[0]?.id ?? "");
-      }
+      setInvestors((data ?? []) as InvestorRecord[]);
+      setViewerInvestor(null);
     }
 
     void loadInvestors();
@@ -217,50 +303,48 @@ export function ReportExportManager({
 
   useEffect(() => {
     async function refreshCounts() {
-      if (!defaultStoreId) {
+      if (!effectiveStoreId) {
         return;
       }
 
       try {
         validateMonthRange(operationStartMonth, operationEndMonth);
-        const counts = await countRecords(
-          "operation",
-          operationStartMonth,
-          operationEndMonth
+        setOperationCount(
+          await countRecords("operation", operationStartMonth, operationEndMonth)
         );
-        setOperationCount(counts);
       } catch {
-        setOperationCount({ incomeCount: 0, expenseCount: 0, dividendCount: 0 });
+        setOperationCount(emptyCounts);
       }
     }
 
     void refreshCounts();
-  }, [defaultStoreId, operationEndMonth, operationStartMonth]);
+  }, [effectiveStoreId, operationEndMonth, operationStartMonth]);
 
   useEffect(() => {
     async function refreshCounts() {
-      if (!defaultStoreId || !canExportInvestment) {
+      if (!effectiveStoreId || !canExportInvestment) {
         return;
       }
 
       try {
         validateMonthRange(investmentStartMonth, investmentEndMonth);
-        const counts = await countRecords(
-          "investment",
-          investmentStartMonth,
-          investmentEndMonth,
-          selectedInvestorId
+        setInvestmentCount(
+          await countRecords(
+            "investment",
+            investmentStartMonth,
+            investmentEndMonth,
+            selectedInvestorId
+          )
         );
-        setInvestmentCount(counts);
       } catch {
-        setInvestmentCount({ incomeCount: 0, expenseCount: 0, dividendCount: 0 });
+        setInvestmentCount(emptyCounts);
       }
     }
 
     void refreshCounts();
   }, [
     canExportInvestment,
-    defaultStoreId,
+    effectiveStoreId,
     investmentEndMonth,
     investmentStartMonth,
     selectedInvestorId
@@ -272,7 +356,7 @@ export function ReportExportManager({
     endMonth: string,
     investorId = "all"
   ) {
-    if (!defaultStoreId) {
+    if (!effectiveStoreId) {
       throw new Error("当前用户没有绑定 store_id，无法导出报表。");
     }
 
@@ -282,13 +366,13 @@ export function ReportExportManager({
         supabase
           .from("incomes")
           .select("id", { count: "exact", head: true })
-          .eq("store_id", defaultStoreId)
+          .eq("store_id", effectiveStoreId)
           .gte("settlement_period", range.start)
           .lt("settlement_period", range.end),
         supabase
           .from("expenses")
           .select("id", { count: "exact", head: true })
-          .eq("store_id", defaultStoreId)
+          .eq("store_id", effectiveStoreId)
           .gte("date", range.start)
           .lt("date", range.end),
         type === "investment"
@@ -296,7 +380,7 @@ export function ReportExportManager({
               let query = supabase
                 .from("dividend_records")
                 .select("id", { count: "exact", head: true })
-                .eq("store_id", defaultStoreId)
+                .eq("store_id", effectiveStoreId)
                 .gte("settlement_month", range.start)
                 .lt("settlement_month", range.end);
 
@@ -318,11 +402,13 @@ export function ReportExportManager({
       throw loadError;
     }
 
-    return {
+    const counts = {
       incomeCount: incomeCountResult.count ?? 0,
       expenseCount: expenseCountResult.count ?? 0,
       dividendCount: dividendCountResult.count ?? 0
     };
+
+    return counts;
   }
 
   function validateMonthRange(startMonth: string, endMonth: string) {
@@ -331,16 +417,20 @@ export function ReportExportManager({
     }
   }
 
-  function checkLargeExport(counts: CountSummary) {
-    const total = counts.incomeCount + counts.expenseCount + counts.dividendCount;
+  function checkLargeExport(counts: CountSummary, includeDividendCount: boolean) {
+    const total = getTotalCount(counts, includeDividendCount);
 
     if (total > 10000) {
       throw new Error("当前导出数据量超过建议范围。请缩小时间区间后再导出。");
     }
 
     if (total > 5000) {
+      const dividendLine = includeDividendCount
+        ? `\n分红记录：${counts.dividendCount} 条`
+        : "";
+
       return window.confirm(
-        `数据量较大，生成时间可能需要数十秒，请耐心等待。\n\n收入记录：${counts.incomeCount} 条\n支出记录：${counts.expenseCount} 条\n分红记录：${counts.dividendCount} 条\n导出总记录：${total} 条\n\n是否继续导出？`
+        `数据量较大，生成时间可能需要数十秒，请耐心等待。\n\n收入记录：${counts.incomeCount} 条\n支出记录：${counts.expenseCount} 条${dividendLine}\n导出总记录：${total} 条\n\n是否继续导出？`
       );
     }
 
@@ -348,7 +438,7 @@ export function ReportExportManager({
   }
 
   async function fetchOperationData(startMonth: string, endMonth: string) {
-    if (!defaultStoreId) {
+    if (!effectiveStoreId) {
       throw new Error("当前用户没有绑定 store_id，无法导出报表。");
     }
 
@@ -357,14 +447,14 @@ export function ReportExportManager({
       supabase
         .from("incomes")
         .select("date,source,gross_amount,fee_amount,net_amount,settlement_period,note")
-        .eq("store_id", defaultStoreId)
+        .eq("store_id", effectiveStoreId)
         .gte("settlement_period", range.start)
         .lt("settlement_period", range.end)
         .order("date", { ascending: true }),
       supabase
         .from("expenses")
         .select("date,category,payee,amount,included_in_monthly_cost,note")
-        .eq("store_id", defaultStoreId)
+        .eq("store_id", effectiveStoreId)
         .gte("date", range.start)
         .lt("date", range.end)
         .order("date", { ascending: true })
@@ -382,6 +472,21 @@ export function ReportExportManager({
     };
   }
 
+  function getOperationTotals(incomes: IncomeRecord[], expenses: ExpenseRecord[]) {
+    const costExpenses = expenses.filter((expense) =>
+      Boolean(expense.included_in_monthly_cost)
+    );
+    const totalIncome = sumAmounts(incomes, (income) => income.net_amount);
+    const totalExpense = sumAmounts(costExpenses, (expense) => expense.amount);
+
+    return {
+      costExpenses,
+      totalIncome,
+      totalExpense,
+      totalNetProfit: roundMoney(totalIncome - totalExpense)
+    };
+  }
+
   function buildOperationWorkbook({
     startMonth,
     endMonth,
@@ -394,12 +499,8 @@ export function ReportExportManager({
     expenses: ExpenseRecord[];
   }) {
     const workbook = XLSX.utils.book_new();
-    const costExpenses = expenses.filter((expense) =>
-      Boolean(expense.included_in_monthly_cost)
-    );
-    const totalIncome = sumAmounts(incomes, (income) => income.net_amount);
-    const totalExpense = sumAmounts(costExpenses, (expense) => expense.amount);
-    const totalNetProfit = roundMoney(totalIncome - totalExpense);
+    const { costExpenses, totalIncome, totalExpense, totalNetProfit } =
+      getOperationTotals(incomes, expenses);
     const monthRows = buildMonthList(startMonth, endMonth).map((month) => {
       const monthlyIncome = sumAmounts(
         incomes.filter((income) => income.settlement_period.slice(0, 7) === month),
@@ -418,11 +519,15 @@ export function ReportExportManager({
       };
     });
 
-    appendSheet(workbook, "经营汇总", [
-      { 项目: "总收入", 金额: totalIncome },
-      { 项目: "总支出", 金额: totalExpense },
-      { 项目: "总净利润", 金额: totalNetProfit }
-    ]);
+    appendHorizontalSummarySheet({
+      workbook,
+      sheetName: "经营汇总",
+      startMonth,
+      endMonth,
+      totalIncome,
+      totalExpense,
+      totalNetProfit
+    });
     appendSheet(
       workbook,
       "收入明细",
@@ -465,7 +570,7 @@ export function ReportExportManager({
       );
       setOperationCount(counts);
 
-      if (!checkLargeExport(counts)) {
+      if (!checkLargeExport(counts, false)) {
         return;
       }
 
@@ -487,15 +592,23 @@ export function ReportExportManager({
     }
   }
 
-  async function fetchInvestmentData(startMonth: string, endMonth: string) {
-    if (!defaultStoreId) {
-      throw new Error("当前用户没有绑定 store_id，无法导出报表。");
+  function getSelectedInvestors() {
+    if (currentRole === "viewer") {
+      return viewerInvestor ? [viewerInvestor] : [];
     }
 
-    const investorIds =
-      selectedInvestorId === "all"
-        ? investors.map((investor) => investor.id)
-        : [selectedInvestorId].filter(Boolean);
+    if (selectedInvestorId === "all") {
+      return uniqueInvestorsById(investors);
+    }
+
+    return uniqueInvestorsById(
+      investors.filter((investor) => investor.id === selectedInvestorId)
+    );
+  }
+
+  async function fetchInvestmentData(startMonth: string, endMonth: string) {
+    const selectedInvestors = getSelectedInvestors();
+    const investorIds = selectedInvestors.map((investor) => investor.id);
 
     if (investorIds.length === 0) {
       throw new Error("当前没有可导出的投资人数据。");
@@ -505,17 +618,19 @@ export function ReportExportManager({
     const [operationData, investmentResult, dividendResult, cumulativeResult] =
       await Promise.all([
         fetchOperationData(startMonth, endMonth),
-        supabase
-          .from("investment_records")
-          .select("investor_id,amount")
-          .eq("store_id", defaultStoreId)
-          .in("investor_id", investorIds),
+        currentRole === "viewer"
+          ? Promise.resolve({ data: [], error: null })
+          : supabase
+              .from("investment_records")
+              .select("investor_id,amount")
+              .eq("store_id", effectiveStoreId)
+              .in("investor_id", investorIds),
         supabase
           .from("dividend_records")
           .select(
             "settlement_month,investor_id,investor_name,expected_amount,paid_amount,status,paid_date"
           )
-          .eq("store_id", defaultStoreId)
+          .eq("store_id", effectiveStoreId)
           .in("investor_id", investorIds)
           .gte("settlement_month", range.start)
           .lt("settlement_month", range.end)
@@ -525,7 +640,7 @@ export function ReportExportManager({
           .select(
             "settlement_month,investor_id,investor_name,expected_amount,paid_amount,status,paid_date"
           )
-          .eq("store_id", defaultStoreId)
+          .eq("store_id", effectiveStoreId)
           .in("investor_id", investorIds)
           .eq("status", "paid")
       ]);
@@ -539,9 +654,7 @@ export function ReportExportManager({
 
     return {
       ...operationData,
-      selectedInvestors: investors.filter((investor) =>
-        investorIds.includes(investor.id)
-      ),
+      selectedInvestors,
       investmentRecords: (investmentResult.data ?? []) as InvestmentRecord[],
       dividendRecords: (dividendResult.data ?? []) as DividendRecord[],
       cumulativeDividends: (cumulativeResult.data ?? []) as DividendRecord[]
@@ -549,6 +662,8 @@ export function ReportExportManager({
   }
 
   function buildInvestmentWorkbook({
+    startMonth,
+    endMonth,
     incomes,
     expenses,
     selectedInvestors,
@@ -556,6 +671,8 @@ export function ReportExportManager({
     dividendRecords,
     cumulativeDividends
   }: {
+    startMonth: string;
+    endMonth: string;
     incomes: IncomeRecord[];
     expenses: ExpenseRecord[];
     selectedInvestors: InvestorRecord[];
@@ -564,19 +681,20 @@ export function ReportExportManager({
     cumulativeDividends: DividendRecord[];
   }) {
     const workbook = XLSX.utils.book_new();
-    const costExpenses = expenses.filter((expense) =>
-      Boolean(expense.included_in_monthly_cost)
+    const { totalIncome, totalExpense, totalNetProfit } = getOperationTotals(
+      incomes,
+      expenses
     );
-    const totalIncome = sumAmounts(incomes, (income) => income.net_amount);
-    const totalExpense = sumAmounts(costExpenses, (expense) => expense.amount);
-    const totalNetProfit = roundMoney(totalIncome - totalExpense);
 
     appendSheet(
       workbook,
       "投资收益汇总",
       selectedInvestors.map((investor) => {
+        const investorInvestmentRecords = investmentRecords.filter(
+          (record) => record.investor_id === investor.id
+        );
         const investorInvestment = sumAmounts(
-          investmentRecords.filter((record) => record.investor_id === investor.id),
+          investorInvestmentRecords,
           (record) => record.amount
         );
         const effectiveInvestment =
@@ -584,6 +702,10 @@ export function ReportExportManager({
         const investorDividends = dividendRecords.filter(
           (record) => record.investor_id === investor.id
         );
+        const displayName =
+          investor.name === "当前投资人"
+            ? investorDividends[0]?.investor_name ?? investor.name
+            : investor.name;
         const expectedDividend = sumAmounts(
           investorDividends,
           (record) => record.expected_amount
@@ -602,7 +724,7 @@ export function ReportExportManager({
         );
 
         return {
-          投资人: investor.name,
+          投资人: displayName,
           投资金额: effectiveInvestment,
           当前持股比例: `${(parseAmount(investor.share_ratio) * 100).toFixed(2)}%`,
           区间净利润: totalNetProfit,
@@ -629,11 +751,15 @@ export function ReportExportManager({
         发放日期: record.paid_date ?? ""
       }))
     );
-    appendSheet(workbook, "项目经营概览", [
-      { 项目: "总收入", 金额: totalIncome },
-      { 项目: "总支出", 金额: totalExpense },
-      { 项目: "总净利润", 金额: totalNetProfit }
-    ]);
+    appendHorizontalSummarySheet({
+      workbook,
+      sheetName: "项目经营概览",
+      startMonth,
+      endMonth,
+      totalIncome,
+      totalExpense,
+      totalNetProfit
+    });
 
     return workbook;
   }
@@ -653,7 +779,7 @@ export function ReportExportManager({
       );
       setInvestmentCount(counts);
 
-      if (!checkLargeExport(counts)) {
+      if (!checkLargeExport(counts, true)) {
         return;
       }
 
@@ -661,7 +787,11 @@ export function ReportExportManager({
         investmentStartMonth,
         investmentEndMonth
       );
-      const workbook = buildInvestmentWorkbook(data);
+      const workbook = buildInvestmentWorkbook({
+        startMonth: investmentStartMonth,
+        endMonth: investmentEndMonth,
+        ...data
+      });
       downloadWorkbook(
         workbook,
         `投资报表_${investmentStartMonth}~${investmentEndMonth}.xlsx`
@@ -712,6 +842,7 @@ export function ReportExportManager({
             buttonLabel="导出经营报表 Excel"
             isExporting={isExportingOperation}
             counts={operationCount}
+            includeDividendCount={false}
             onExport={() => void handleOperationExport()}
           />
         ) : null}
@@ -726,6 +857,7 @@ export function ReportExportManager({
             buttonLabel="导出投资报表 Excel"
             isExporting={isExportingInvestment}
             counts={investmentCount}
+            includeDividendCount
             onExport={() => void handleInvestmentExport()}
           >
             {canSelectInvestor ? (
@@ -762,6 +894,7 @@ function ReportCard({
   buttonLabel,
   isExporting,
   counts,
+  includeDividendCount,
   onExport,
   children
 }: {
@@ -773,10 +906,11 @@ function ReportCard({
   buttonLabel: string;
   isExporting: boolean;
   counts: CountSummary;
+  includeDividendCount: boolean;
   onExport: () => void;
   children?: ReactNode;
 }) {
-  const totalCount = counts.incomeCount + counts.expenseCount + counts.dividendCount;
+  const totalCount = getTotalCount(counts, includeDividendCount);
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
@@ -801,7 +935,7 @@ function ReportCard({
       <div className="mt-5 rounded-lg bg-slate-50 px-4 py-3 text-sm text-stone-600">
         <p>收入记录：{counts.incomeCount} 条</p>
         <p>支出记录：{counts.expenseCount} 条</p>
-        <p>分红记录：{counts.dividendCount} 条</p>
+        {includeDividendCount ? <p>分红记录：{counts.dividendCount} 条</p> : null}
         <p className="font-medium text-ink">导出总记录：{totalCount} 条</p>
       </div>
       <button
