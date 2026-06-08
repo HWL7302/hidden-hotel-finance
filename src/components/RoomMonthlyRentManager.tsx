@@ -582,7 +582,7 @@ export function RoomMonthlyRentManager({
         ))}
       </div>
 
-      {selectedRoom ? (
+      {canManage && selectedRoom ? (
         <div className="mt-6 rounded-xl border border-slate-200 bg-white p-5 shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
           <h3 className="text-lg font-semibold text-ink">当前选中房间</h3>
           <div className="mt-3 grid gap-3 text-sm text-stone-700 md:grid-cols-4">
@@ -608,6 +608,146 @@ export function RoomMonthlyRentManager({
         </div>
       ) : null}
 
+      {!canManage ? (
+        <div className="mt-6 grid gap-6 xl:grid-cols-2">
+          <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stone-200 px-5 py-4">
+              <h3 className="text-lg font-semibold text-ink">房间列表</h3>
+              <select
+                value={roomStatusFilter}
+                onChange={(event) =>
+                  setRoomStatusFilter(event.target.value as "all" | RoomStatus)
+                }
+                className="rounded-md border border-stone-300 bg-white px-3 py-2 text-sm outline-none focus:border-pine"
+              >
+                <option value="all">全部状态</option>
+                {roomStatusOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="min-w-full table-fixed divide-y divide-stone-200 text-sm">
+                <thead className="bg-slate-50 text-left text-slate-600">
+                  <tr>
+                    <CompactHead>房间号</CompactHead>
+                    <CompactHead>房型</CompactHead>
+                    <CompactHead>状态</CompactHead>
+                    <CompactHead>当前租客</CompactHead>
+                    <CompactHead>月租金额</CompactHead>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-stone-100">
+                  {isLoading ? (
+                    <tr>
+                      <td className="px-4 py-6 text-stone-500" colSpan={5}>
+                        正在读取房间数据...
+                      </td>
+                    </tr>
+                  ) : filteredRooms.length === 0 ? (
+                    <tr>
+                      <td className="px-4 py-6 text-stone-500" colSpan={5}>
+                        当前没有符合条件的房间记录。
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredRooms.map((room) => {
+                      const currentRent = activeRentByRoom.get(room.id);
+
+                      return (
+                        <tr key={room.id} className="align-top">
+                          <CompactCell>{room.room_number}</CompactCell>
+                          <CompactCell>{room.room_type || "-"}</CompactCell>
+                          <CompactCell>
+                            {getRoomStatusLabel(room.management_status)}
+                          </CompactCell>
+                          <CompactCell>{currentRent?.tenant_name ?? "-"}</CompactCell>
+                          <CompactCell>
+                            {currentRent
+                              ? formatMoney(currentRent.monthly_rent)
+                              : "-"}
+                          </CompactCell>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stone-200 px-5 py-4">
+              <h3 className="text-lg font-semibold text-ink">月租记录</h3>
+              <select
+                value={rentStatusFilter}
+                onChange={(event) =>
+                  setRentStatusFilter(event.target.value as "all" | RentStatus)
+                }
+                className="rounded-md border border-stone-300 bg-white px-3 py-2 text-sm outline-none focus:border-pine"
+              >
+                <option value="all">全部状态</option>
+                {rentStatusOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="min-w-full table-fixed divide-y divide-stone-200 text-sm">
+                <thead className="bg-slate-50 text-left text-slate-600">
+                  <tr>
+                    <CompactHead>房间号</CompactHead>
+                    <CompactHead>租客姓名</CompactHead>
+                    <CompactHead>月租金额</CompactHead>
+                    <CompactHead>开始日期</CompactHead>
+                    <CompactHead>结束日期</CompactHead>
+                    <CompactHead>状态</CompactHead>
+                    <CompactHead>押金</CompactHead>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-stone-100">
+                  {isLoading ? (
+                    <tr>
+                      <td className="px-4 py-6 text-stone-500" colSpan={7}>
+                        正在读取月租记录...
+                      </td>
+                    </tr>
+                  ) : filteredRentRecords.length === 0 ? (
+                    <tr>
+                      <td className="px-4 py-6 text-stone-500" colSpan={7}>
+                        当前月份暂无符合条件的月租记录。
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredRentRecords.map((record) => {
+                      const room = rooms.find((item) => item.id === record.room_id);
+
+                      return (
+                        <tr key={record.id} className="align-top">
+                          <CompactCell>{room?.room_number ?? "-"}</CompactCell>
+                          <CompactCell>{record.tenant_name}</CompactCell>
+                          <CompactCell>{formatMoney(record.monthly_rent)}</CompactCell>
+                          <CompactCell>{record.start_date}</CompactCell>
+                          <CompactCell>{record.end_date ?? "-"}</CompactCell>
+                          <CompactCell>{getRentStatusLabel(record.status)}</CompactCell>
+                          <CompactCell>{formatMoney(record.deposit)}</CompactCell>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {canManage ? (
+        <>
       <div
         className={`mt-6 grid gap-6 ${
           canManage ? "xl:grid-cols-[420px_1fr]" : "grid-cols-1"
@@ -1111,6 +1251,8 @@ export function RoomMonthlyRentManager({
           </div>
         </div>
       </div>
+        </>
+      ) : null}
     </section>
   );
 }
@@ -1119,9 +1261,21 @@ function TableHead({ children }: { children: React.ReactNode }) {
   return <th className="whitespace-nowrap px-4 py-3 font-semibold">{children}</th>;
 }
 
+function CompactHead({ children }: { children: React.ReactNode }) {
+  return <th className="px-3 py-3 font-semibold">{children}</th>;
+}
+
 function TableCell({ children }: { children: React.ReactNode }) {
   return (
     <td className="whitespace-nowrap px-4 py-3 text-stone-700">
+      {children}
+    </td>
+  );
+}
+
+function CompactCell({ children }: { children: React.ReactNode }) {
+  return (
+    <td className="truncate px-3 py-3 text-stone-700" title={String(children ?? "")}>
       {children}
     </td>
   );
