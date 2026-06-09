@@ -252,13 +252,13 @@ export function AuditLogManager({
         </div>
 
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-stone-200 text-sm">
+          <table className="min-w-full table-fixed divide-y divide-stone-200 text-sm">
             <thead className="bg-slate-50 text-left text-slate-600">
               <tr>
-                <th className="px-4 py-3 font-semibold">时间</th>
-                <th className="px-4 py-3 font-semibold">操作人</th>
-                <th className="px-4 py-3 font-semibold">操作对象</th>
-                <th className="px-4 py-3 font-semibold">操作内容</th>
+                <th className="w-[20%] px-5 py-4 font-semibold">时间</th>
+                <th className="w-[20%] px-5 py-4 font-semibold">操作人</th>
+                <th className="w-[25%] px-5 py-4 font-semibold">操作对象</th>
+                <th className="w-[35%] px-5 py-4 font-semibold">操作内容</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-stone-100">
@@ -276,19 +276,22 @@ export function AuditLogManager({
                 </tr>
               ) : (
                 records.map((record) => (
-                  <tr key={record.id} className="align-top">
-                    <td className="whitespace-nowrap px-4 py-3 text-stone-700">
+                  <tr
+                    key={record.id}
+                    className="min-h-[64px] align-top transition-colors hover:bg-pine/5"
+                  >
+                    <td className="whitespace-nowrap px-5 py-5 text-stone-700">
                       {new Date(record.created_at).toLocaleString("zh-CN")}
                     </td>
-                    <td className="px-4 py-3 text-stone-700">
+                    <td className="px-5 py-5 text-stone-700">
                       {operatorNames[normalizeEmail(record.user_email)] ?? "-"}
                     </td>
-                    <td className="px-4 py-3 text-stone-700">
+                    <td className="px-5 py-5 text-stone-700">
                       {record.target_type
                         ? targetLabels[record.target_type] ?? record.target_type
                         : "-"}
                     </td>
-                    <td className="px-4 py-3 font-medium text-ink">
+                    <td className="px-5 py-5 font-medium leading-6 text-ink">
                       {fallbackOperationText(record)}
                     </td>
                   </tr>
