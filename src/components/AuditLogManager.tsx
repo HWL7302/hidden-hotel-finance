@@ -15,6 +15,11 @@ type AuditLogRecord = {
   created_at: string;
 };
 
+type InvestorNameRecord = {
+  name: string;
+  email: string | null;
+};
+
 const actionOptions = [
   ["create", "新增"],
   ["update", "编辑"],
@@ -44,13 +49,6 @@ const targetOptions = [
   ["audit_log", "审计日志"]
 ] as const;
 
-const roleLabels: Record<string, string> = {
-  admin: "管理员",
-  operator: "经营方",
-  viewer: "投资人",
-  system: "系统"
-};
-
 const actionLabels = Object.fromEntries(actionOptions);
 const targetLabels = Object.fromEntries(targetOptions);
 
@@ -67,16 +65,26 @@ function getMonthRange(month: string) {
 }
 
 function fallbackOperationText(record: AuditLogRecord) {
-  if (record.operation_text?.trim()) {
-    return record.operation_text.trim();
-  }
-
   const action = actionLabels[record.action] ?? record.action;
   const target = record.target_type
     ? targetLabels[record.target_type] ?? record.target_type
     : "";
+  const prefix = `${action}${target}`;
+  const operationText = record.operation_text?.trim();
 
-  return `${action}${target}` || "-";
+  if (operationText) {
+    if (operationText.includes(action) || operationText.includes(target)) {
+      return operationText;
+    }
+
+    return target ? `${prefix}：${operationText}` : `${action}：${operationText}`;
+  }
+
+  return prefix || "-";
+}
+
+function normalizeEmail(value: string | null | undefined) {
+  return value?.trim().toLowerCase() ?? "";
 }
 
 export function AuditLogManager({
@@ -94,6 +102,7 @@ export function AuditLogManager({
   const [actionFilter, setActionFilter] = useState("all");
   const [targetFilter, setTargetFilter] = useState("all");
   const [records, setRecords] = useState<AuditLogRecord[]>([]);
+  const [operatorNames, setOperatorNames] = useState<Record<string, string>>({});
   const [error, setError] = useState(storeLoadError);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -132,16 +141,39 @@ export function AuditLogManager({
       query = query.eq("target_type", targetFilter);
     }
 
-    const { data, error: loadError } = await query;
+    const [logResult, investorResult] = await Promise.all([
+      query,
+      supabase
+        .from("investors")
+        .select("name,email")
+        .eq("store_id", defaultStoreId)
+        .not("email", "is", null)
+    ]);
     setIsLoading(false);
 
-    if (loadError) {
-      setError(loadError.message);
+    if (logResult.error) {
+      setError(logResult.error.message);
       return;
     }
 
+    if (investorResult.error) {
+      setError(investorResult.error.message);
+      return;
+    }
+
+    const nextOperatorNames: Record<string, string> = {};
+
+    ((investorResult.data ?? []) as InvestorNameRecord[]).forEach((investor) => {
+      const email = normalizeEmail(investor.email);
+
+      if (email) {
+        nextOperatorNames[email] = investor.name;
+      }
+    });
+
     setError("");
-    setRecords((data ?? []) as AuditLogRecord[]);
+    setOperatorNames(nextOperatorNames);
+    setRecords((logResult.data ?? []) as AuditLogRecord[]);
   }
 
   useEffect(() => {
@@ -224,8 +256,8 @@ export function AuditLogManager({
             <thead className="bg-slate-50 text-left text-slate-600">
               <tr>
                 <th className="px-4 py-3 font-semibold">时间</th>
-                <th className="px-4 py-3 font-semibold">用户</th>
-                <th className="px-4 py-3 font-semibold">权限</th>
+                <th className="px-4 py-3 font-semibold">操作人</th>
+                <th className="px-4 py-3 font-semibold">操作对象</th>
                 <th className="px-4 py-3 font-semibold">操作内容</th>
               </tr>
             </thead>
@@ -249,11 +281,11 @@ export function AuditLogManager({
                       {new Date(record.created_at).toLocaleString("zh-CN")}
                     </td>
                     <td className="px-4 py-3 text-stone-700">
-                      {record.user_email || "系统"}
+                      {operatorNames[normalizeEmail(record.user_email)] ?? "-"}
                     </td>
                     <td className="px-4 py-3 text-stone-700">
-                      {record.user_role
-                        ? roleLabels[record.user_role] ?? record.user_role
+                      {record.target_type
+                        ? targetLabels[record.target_type] ?? record.target_type
                         : "-"}
                     </td>
                     <td className="px-4 py-3 font-medium text-ink">
