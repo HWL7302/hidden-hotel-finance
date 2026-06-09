@@ -2,7 +2,7 @@ export const ADMIN_EMAIL = "kiu9ninomi@gmail.com";
 
 export const roleOptions = [
   { value: "admin", label: "管理员" },
-  { value: "operator", label: "经营方" },
+  { value: "operator", label: "经营者" },
   { value: "viewer", label: "投资人" }
 ] as const;
 

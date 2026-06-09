@@ -936,12 +936,6 @@ export function InvestorManager({
               </select>
             </label>
 
-            {form.investmentType === "rent_equity" ? (
-              <div className="rounded-md border border-brass/30 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">
-                房租入股将作为投资记录处理，不计入前两年实际支出。例如：5000/月 x 24 个月，永久股权。
-              </div>
-            ) : null}
-
             <label className="block">
               <span className="text-sm font-medium text-stone-700">
                 投资日期
