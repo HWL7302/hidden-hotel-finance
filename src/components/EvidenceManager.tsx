@@ -45,6 +45,10 @@ function getEvidenceTypeLabel(type: EvidenceType) {
   return "其他";
 }
 
+function getEvidenceCardTypeLabel(type: EvidenceType) {
+  return `${getEvidenceTypeLabel(type)}凭证`;
+}
+
 function getRelatedRecordLink(record: EvidenceRecord, month: string) {
   if (!record.related_table || !record.related_record_id) {
     return null;
@@ -281,23 +285,23 @@ export function EvidenceManager({
       ) : null}
 
       <div className="mt-6 rounded-xl border border-slate-200 bg-white shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
-        <div className="flex flex-wrap items-end justify-between gap-4 border-b border-stone-200 px-5 py-4">
-          <div className="flex flex-wrap gap-4">
-            <label className="flex items-center gap-3 text-sm font-medium text-ink">
+        <div className="flex flex-col gap-4 border-b border-stone-200 px-5 py-4 md:flex-row md:flex-wrap md:items-end md:justify-between">
+          <div className="flex flex-col gap-4 md:flex-row md:flex-wrap">
+            <label className="flex flex-col gap-2 text-sm font-medium text-ink sm:flex-row sm:items-center sm:gap-3">
               <span className="whitespace-nowrap">显示月份：</span>
               <MonthInput
                 value={month}
                 onChange={(event) => setMonth(event.target.value)}
               />
             </label>
-            <label className="flex items-center gap-3 text-sm font-medium text-ink">
+            <label className="flex flex-col gap-2 text-sm font-medium text-ink sm:flex-row sm:items-center sm:gap-3">
               <span className="whitespace-nowrap">凭证类型：</span>
               <select
                 value={typeFilter}
                 onChange={(event) =>
                   setTypeFilter(event.target.value as EvidenceFilter)
                 }
-                className="block rounded-md border border-stone-300 bg-white px-3 py-2 text-sm"
+                className="block w-full rounded-md border border-stone-300 bg-white px-3 py-3 text-sm sm:w-auto sm:py-2"
               >
                 <option value="all">全部</option>
                 <option value="income">收入凭证</option>
@@ -311,14 +315,14 @@ export function EvidenceManager({
               type="button"
               onClick={() => void handleBatchDownload()}
               disabled={isBatchDownloading || isLoading}
-              className="rounded-md border border-stone-300 px-4 py-2 text-sm font-medium text-ink transition hover:border-pine hover:text-pine disabled:cursor-not-allowed disabled:opacity-60"
+              className="min-h-11 rounded-md border border-stone-300 px-4 py-2 text-sm font-medium text-ink transition hover:border-pine hover:text-pine disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isBatchDownloading ? "打包中..." : "批量下载"}
             </button>
           ) : null}
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="hidden overflow-x-auto md:block">
           <table className="min-w-full divide-y divide-stone-200 text-sm">
             <thead className="bg-slate-50 text-left text-slate-600">
               <tr>
@@ -391,6 +395,67 @@ export function EvidenceManager({
               )}
             </tbody>
           </table>
+        </div>
+
+        <div className="space-y-3 p-4 md:hidden">
+          {isLoading ? (
+            <p className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-5 text-sm text-stone-500">
+              正在读取凭证...
+            </p>
+          ) : records.length === 0 ? (
+            <p className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-5 text-sm text-stone-500">
+              当前筛选范围暂无凭证记录。
+            </p>
+          ) : (
+            records.map((record) => {
+              const relatedLink = getRelatedRecordLink(record, month);
+
+              return (
+                <article
+                  key={record.id}
+                  className="rounded-xl border border-slate-200 bg-white p-4"
+                >
+                  <p className="text-sm font-semibold text-ink">
+                    {getEvidenceCardTypeLabel(record.evidence_type)}
+                  </p>
+                  <p className="mt-3 break-all text-sm font-medium text-ink">
+                    {record.file_name}
+                  </p>
+                  <div className="mt-3 text-sm">
+                    <span className="text-stone-500">关联记录：</span>
+                    {relatedLink ? (
+                      <Link
+                        href={relatedLink.href}
+                        className="font-medium text-pine hover:text-ink"
+                      >
+                        {relatedLink.label}
+                      </Link>
+                    ) : (
+                      <span className="text-stone-500">—</span>
+                    )}
+                  </div>
+                  <div className="mt-4 flex flex-wrap gap-3">
+                    <button
+                      type="button"
+                      onClick={() => void handleView(record)}
+                      className="min-h-11 rounded-md border border-stone-300 px-4 py-2 text-sm font-medium text-ink"
+                    >
+                      查看凭证
+                    </button>
+                    {canManage ? (
+                      <button
+                        type="button"
+                        onClick={() => void handleDelete(record)}
+                        className="min-h-11 rounded-md border border-red-200 px-4 py-2 text-sm font-medium text-red-700"
+                      >
+                        删除
+                      </button>
+                    ) : null}
+                  </div>
+                </article>
+              );
+            })
+          )}
         </div>
       </div>
     </section>

@@ -521,6 +521,7 @@ export function ExpenseManager({
                 value={form.date}
                 disabled={isMonthLocked}
                 onChange={(event) => updateForm("date", event.target.value)}
+                className="box-border w-full min-w-0 max-w-full rounded-md border border-stone-300 bg-white px-3 py-3 text-sm outline-none transition focus:border-pine focus:ring-2 focus:ring-pine/20 sm:py-2"
               />
             </label>
 
