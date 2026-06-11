@@ -38,7 +38,7 @@ export function LoginForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-5">
+    <form onSubmit={handleSubmit} className="min-w-0 space-y-5">
       <div>
         <label htmlFor="email" className="block text-sm font-medium text-ink">
           邮箱
@@ -50,7 +50,7 @@ export function LoginForm() {
           onChange={(event) => setEmail(event.target.value)}
           required
           autoComplete="email"
-          className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-base outline-none transition focus:border-pine focus:ring-2 focus:ring-pine/20"
+          className="mt-2 w-full min-w-0 rounded-lg border border-slate-300 bg-white px-4 py-3 text-base outline-none transition focus:border-pine focus:ring-2 focus:ring-pine/20"
         />
       </div>
       <div>
@@ -64,11 +64,11 @@ export function LoginForm() {
           onChange={(event) => setPassword(event.target.value)}
           required
           autoComplete="current-password"
-          className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-base outline-none transition focus:border-pine focus:ring-2 focus:ring-pine/20"
+          className="mt-2 w-full min-w-0 rounded-lg border border-slate-300 bg-white px-4 py-3 text-base outline-none transition focus:border-pine focus:ring-2 focus:ring-pine/20"
         />
       </div>
       {error ? (
-        <p className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <p className="break-words rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {error}
         </p>
       ) : null}
