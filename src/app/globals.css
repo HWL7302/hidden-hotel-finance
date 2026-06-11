@@ -57,3 +57,20 @@ body {
     color: #2f2d4a;
   }
 }
+
+@media (max-width: 767px) {
+  .mobile-expense-date-input {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+
+  .mobile-expense-date-input::-webkit-date-and-time-value {
+    min-width: 0;
+    max-width: 100%;
+    width: 100%;
+    text-align: center;
+  }
+}
