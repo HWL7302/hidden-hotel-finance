@@ -199,10 +199,23 @@ function normalizeInvestorName(record: InvestorRecord) {
   return (record.name || record.email || record.id).trim().toLowerCase();
 }
 
+function isReportEligibleInvestor(
+  investor: Pick<InvestorRecord, "investment_amount" | "share_ratio">
+) {
+  return (
+    parseAmount(investor.investment_amount) > 0 &&
+    parseAmount(investor.share_ratio) > 0
+  );
+}
+
 function groupInvestorsForExport(records: InvestorRecord[]) {
   const map = new Map<string, ExportInvestor>();
 
   for (const record of records) {
+    if (!isReportEligibleInvestor(record)) {
+      continue;
+    }
+
     const key = normalizeInvestorName(record);
     const existing = map.get(key);
 
@@ -293,6 +306,14 @@ export function ReportExportManager({
         if (!profile?.id) {
           setViewerInvestor(null);
           setSelectedInvestorId("");
+          return;
+        }
+
+        if (!isReportEligibleInvestor(profile)) {
+          setViewerInvestor(null);
+          setInvestors([]);
+          setSelectedInvestorId("");
+          setError("当前账号不是投资人账号，暂无分红数据。");
           return;
         }
 
@@ -413,6 +434,9 @@ export function ReportExportManager({
           .lt("date", range.end),
         type === "investment"
           ? (() => {
+              const investorIds = getSelectedInvestors().flatMap(
+                (investor) => investor.investor_ids
+              );
               let query = supabase
                 .from("dividend_records")
                 .select("id", { count: "exact", head: true })
@@ -420,16 +444,13 @@ export function ReportExportManager({
                 .gte("settlement_month", range.start)
                 .lt("settlement_month", range.end);
 
-              if (investorId !== "all") {
-                const investorIds = getSelectedInvestors().flatMap(
-                  (investor) => investor.investor_ids
+              if (investorIds.length > 0) {
+                query = query.in("investor_id", investorIds);
+              } else {
+                query = query.eq(
+                  "investor_id",
+                  "00000000-0000-0000-0000-000000000000"
                 );
-
-                if (investorIds.length > 0) {
-                  query = query.in("investor_id", investorIds);
-                } else {
-                  query = query.eq("investor_id", investorId);
-                }
               }
 
               return query;

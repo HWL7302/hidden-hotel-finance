@@ -106,6 +106,19 @@ function formatPercentFromFraction(value: string | number) {
   return `${(parseAmount(value) * 100).toFixed(2)}%`;
 }
 
+function isDividendEligibleInvestor(
+  investor: Pick<
+    InvestorRecord,
+    "investment_amount" | "share_ratio" | "is_active"
+  >
+) {
+  return (
+    investor.is_active &&
+    parseAmount(investor.investment_amount) > 0 &&
+    parseAmount(investor.share_ratio) > 0
+  );
+}
+
 function formatMonthLabel(value: string) {
   return value ? value.slice(0, 7).replace("-", "年") + "月" : "-";
 }
@@ -292,6 +305,22 @@ export function DividendRecordsManager({
       return;
     }
 
+    if (
+      isInvestorView &&
+      matchedInvestor &&
+      (parseAmount(matchedInvestor.investment_amount) <= 0 ||
+        parseAmount(matchedInvestor.share_ratio) <= 0)
+    ) {
+      setIncomes([]);
+      setExpenses([]);
+      setInvestors([]);
+      setRecords([]);
+      setSummaryRecords([]);
+      setIsMonthLocked(false);
+      setNotice("当前账号不是投资人账号，暂无分红数据。");
+      return;
+    }
+
     let dividendQuery = supabase
       .from("dividend_records")
       .select(
@@ -344,11 +373,21 @@ export function DividendRecordsManager({
     setIncomes((incomeResult.data ?? []) as IncomeRecord[]);
     setExpenses((expenseResult.data ?? []) as ExpenseRecord[]);
     setInvestors(loadedInvestors);
-    setRecords((dividendResult.data ?? []) as DividendRecord[]);
+    const eligibleInvestorIds = new Set(
+      loadedInvestors.filter(isDividendEligibleInvestor).map((investor) => investor.id)
+    );
+    const loadedDividendRecords = (dividendResult.data ?? []) as DividendRecord[];
+    const visibleDividendRecords = isInvestorView
+      ? loadedDividendRecords
+      : loadedDividendRecords.filter((record) =>
+          eligibleInvestorIds.has(record.investor_id)
+        );
+
+    setRecords(visibleDividendRecords);
     setSummaryRecords(
       isInvestorView
         ? ((summaryDividendResult.data ?? []) as DividendRecord[])
-        : ((dividendResult.data ?? []) as DividendRecord[])
+        : visibleDividendRecords
     );
     setIsMonthLocked(Boolean((closingResult.data as MonthlyClosingRecord | null)?.is_locked));
   }
@@ -385,12 +424,7 @@ export function DividendRecordsManager({
       return;
     }
 
-    const activeInvestors = investors.filter(
-      (investor) =>
-        investor.is_active &&
-        parseAmount(investor.investment_amount) > 0 &&
-        parseAmount(investor.share_ratio) > 0
-    );
+    const activeInvestors = investors.filter(isDividendEligibleInvestor);
 
     if (activeInvestors.length === 0) {
       setError("当前没有可生成分红的有效投资人。");
@@ -679,8 +713,15 @@ export function DividendRecordsManager({
     const latestExpenses = (expenseResult.data ?? []) as ExpenseRecord[];
     const latestInvestors = (investorResult.data ?? []) as InvestorRecord[];
     const latestRecords = (dividendResult.data ?? []) as DividendRecord[];
+    const latestEligibleInvestors = latestInvestors.filter(isDividendEligibleInvestor);
+    const latestEligibleInvestorIds = new Set(
+      latestEligibleInvestors.map((investor) => investor.id)
+    );
+    const visibleLatestRecords = latestRecords.filter((record) =>
+      latestEligibleInvestorIds.has(record.investor_id)
+    );
 
-    if (latestRecords.length === 0) {
+    if (visibleLatestRecords.length === 0) {
       setIsRefreshing(false);
       setError("请先生成本月分红记录。");
       return;
@@ -707,9 +748,9 @@ export function DividendRecordsManager({
     }
 
     const investorById = new Map(
-      latestInvestors.map((investor) => [investor.id, investor])
+      latestEligibleInvestors.map((investor) => [investor.id, investor])
     );
-    const refreshableRecords = latestRecords.filter(
+    const refreshableRecords = visibleLatestRecords.filter(
       (record) => record.status === "unpaid" || record.status === "deferred"
     );
 
@@ -718,8 +759,8 @@ export function DividendRecordsManager({
       setNotice("本月没有未发放或暂缓发放的分红记录需要刷新。");
       setIncomes(latestIncomes);
       setExpenses(latestExpenses);
-      setInvestors(latestInvestors);
-      setRecords(latestRecords);
+      setInvestors(latestEligibleInvestors);
+      setRecords(visibleLatestRecords);
       return;
     }
 
