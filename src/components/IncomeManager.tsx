@@ -151,6 +151,21 @@ export function IncomeManager({
   const [isMonthLocked, setIsMonthLocked] = useState(false);
   const [evidenceFile, setEvidenceFile] = useState<File | null>(null);
   const [fileInputKey, setFileInputKey] = useState(0);
+  const evidencePreviewUrl = useMemo(() => {
+    if (!evidenceFile?.type.startsWith("image/")) {
+      return "";
+    }
+
+    return URL.createObjectURL(evidenceFile);
+  }, [evidenceFile]);
+
+  useEffect(() => {
+    return () => {
+      if (evidencePreviewUrl) {
+        URL.revokeObjectURL(evidencePreviewUrl);
+      }
+    };
+  }, [evidencePreviewUrl]);
 
   async function loadIncomes() {
     setError("");
@@ -220,7 +235,12 @@ export function IncomeManager({
 
     setHighlightedId(nextHighlightedId);
     window.setTimeout(() => {
-      document.getElementById(`income-${nextHighlightedId}`)?.scrollIntoView({
+      const targetId =
+        window.innerWidth < 768
+          ? `income-mobile-${nextHighlightedId}`
+          : `income-${nextHighlightedId}`;
+
+      document.getElementById(targetId)?.scrollIntoView({
         behavior: "smooth",
         block: "center"
       });
@@ -268,6 +288,11 @@ export function IncomeManager({
 
   function handleEvidenceFileChange(event: ChangeEvent<HTMLInputElement>) {
     setEvidenceFile(event.target.files?.[0] ?? null);
+  }
+
+  function clearEvidenceFile() {
+    setEvidenceFile(null);
+    setFileInputKey((current) => current + 1);
   }
 
   function startEdit(income: IncomeRecord) {
@@ -528,10 +553,10 @@ export function IncomeManager({
         </p>
       ) : null}
 
-      <div className="mt-6 grid gap-6 xl:grid-cols-[380px_1fr]">
+      <div className="mt-6 grid min-w-0 gap-6 xl:grid-cols-[380px_1fr]">
         <form
           onSubmit={handleSubmit}
-          className="rounded-xl border border-slate-200 bg-white p-6 shadow-[0_8px_24px_rgba(15,23,42,0.04)]"
+          className="min-w-0 rounded-xl border border-slate-200 bg-white p-5 shadow-[0_8px_24px_rgba(15,23,42,0.04)] sm:p-6"
         >
           <h3 className="text-lg font-semibold text-ink">
             {editingId ? "编辑收入" : "新增收入"}
@@ -541,11 +566,12 @@ export function IncomeManager({
             <label className="block text-sm font-medium text-ink">
               日期
               <DateInput
-              required
-              value={form.date}
-              disabled={isMonthLocked}
-              onChange={(event) => updateForm("date", event.target.value)}
-            />
+                required
+                value={form.date}
+                disabled={isMonthLocked}
+                onChange={(event) => updateForm("date", event.target.value)}
+                className="box-border block w-full min-w-0 max-w-full rounded-md border border-stone-300 bg-white px-3 py-3 text-sm outline-none transition focus:border-pine focus:ring-2 focus:ring-pine/20 sm:py-2"
+              />
             </label>
 
             <label className="block text-sm font-medium text-ink">
@@ -555,7 +581,7 @@ export function IncomeManager({
                 value={form.source}
                 disabled={isMonthLocked}
                 onChange={(event) => updateForm("source", event.target.value)}
-                className="mt-2 w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-pine focus:ring-2 focus:ring-pine/20"
+                className="mt-2 w-full min-w-0 rounded-md border border-stone-300 bg-white px-3 py-3 text-sm outline-none transition focus:border-pine focus:ring-2 focus:ring-pine/20 sm:py-2"
               >
                 <option value="">请选择来源</option>
                 {incomeSourceOptions.map((option) => (
@@ -578,7 +604,7 @@ export function IncomeManager({
                   updateAmountAndNet("grossAmount", event.target.value)
                 }
                 placeholder="0.00"
-                className="mt-2 w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-pine focus:ring-2 focus:ring-pine/20"
+                className="mt-2 w-full min-w-0 rounded-md border border-stone-300 bg-white px-3 py-3 text-sm outline-none transition focus:border-pine focus:ring-2 focus:ring-pine/20 sm:py-2"
               />
             </label>
 
@@ -593,7 +619,7 @@ export function IncomeManager({
                   updateAmountAndNet("feeAmount", event.target.value)
                 }
                 placeholder="0.00"
-                className="mt-2 w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-pine focus:ring-2 focus:ring-pine/20"
+                className="mt-2 w-full min-w-0 rounded-md border border-stone-300 bg-white px-3 py-3 text-sm outline-none transition focus:border-pine focus:ring-2 focus:ring-pine/20 sm:py-2"
               />
             </label>
 
@@ -606,7 +632,7 @@ export function IncomeManager({
                 disabled={isMonthLocked}
                 onChange={(event) => updateForm("netAmount", event.target.value)}
                 placeholder="0.00"
-                className="mt-2 w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-pine focus:ring-2 focus:ring-pine/20"
+                className="mt-2 w-full min-w-0 rounded-md border border-stone-300 bg-white px-3 py-3 text-sm outline-none transition focus:border-pine focus:ring-2 focus:ring-pine/20 sm:py-2"
               />
             </label>
 
@@ -619,6 +645,7 @@ export function IncomeManager({
                 onChange={(event) =>
                   updateForm("settlementPeriod", event.target.value)
                 }
+                className="block w-full min-w-0 rounded-lg border border-slate-300 bg-white px-3 py-3 text-left text-sm outline-none transition focus:border-pine focus:ring-2 focus:ring-pine/20 sm:py-2"
               />
             </label>
 
@@ -627,14 +654,37 @@ export function IncomeManager({
               <input
                 key={fileInputKey}
                 type="file"
-                accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf"
+                accept="image/*,application/pdf"
                 disabled={isMonthLocked}
                 onChange={handleEvidenceFileChange}
-                className="mt-2 block w-full cursor-pointer rounded-lg border border-slate-300 bg-white text-sm text-stone-700 file:mr-4 file:cursor-pointer file:border-0 file:bg-pine/10 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-slateblue hover:file:bg-pine/20"
+                className="mt-2 block w-full min-w-0 cursor-pointer rounded-lg border border-slate-300 bg-white text-sm text-stone-700 file:mr-4 file:cursor-pointer file:border-0 file:bg-pine/10 file:px-4 file:py-3 file:text-sm file:font-semibold file:text-slateblue hover:file:bg-pine/20 sm:file:py-2"
               />
               <span className="mt-1 block text-xs font-normal text-stone-500">
-                可选。支持 jpg、jpeg、png 和 pdf，保存收入后自动关联。
+                可选。支持 jpg、jpeg、png、webp 和 pdf，保存收入后自动关联。
               </span>
+              {evidenceFile ? (
+                <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                  {evidencePreviewUrl ? (
+                    <img
+                      src={evidencePreviewUrl}
+                      alt="待上传凭证预览"
+                      className="mb-3 h-28 w-full rounded-md object-cover"
+                    />
+                  ) : null}
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <span className="break-all text-xs font-normal text-stone-600">
+                      {evidenceFile.name}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={clearEvidenceFile}
+                      className="rounded-md border border-stone-300 px-3 py-2 text-xs font-medium text-ink transition hover:border-pine hover:text-pine"
+                    >
+                      取消选择
+                    </button>
+                  </div>
+                </div>
+              ) : null}
             </label>
 
             <label className="block text-sm font-medium text-ink">
@@ -645,16 +695,16 @@ export function IncomeManager({
                 onChange={(event) => updateForm("note", event.target.value)}
                 rows={3}
                 placeholder="凭证上传将在后续阶段实现。"
-                className="mt-2 w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-pine focus:ring-2 focus:ring-pine/20"
+                className="mt-2 w-full min-w-0 rounded-md border border-stone-300 bg-white px-3 py-3 text-sm outline-none transition focus:border-pine focus:ring-2 focus:ring-pine/20 sm:py-2"
               />
             </label>
           </div>
 
-          <div className="mt-5 flex gap-3">
+          <div className="mt-5 flex flex-wrap gap-3">
             <button
               type="submit"
               disabled={isSaving || isMonthLocked || !canManageIncome}
-              className="rounded-md bg-pine px-4 py-2 text-sm font-semibold text-white transition hover:bg-slateblue disabled:cursor-not-allowed disabled:opacity-60"
+              className="min-h-11 rounded-md bg-pine px-4 py-2 text-sm font-semibold text-white transition hover:bg-slateblue disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isMonthLocked
                 ? "月份已锁定"
@@ -668,7 +718,7 @@ export function IncomeManager({
               <button
                 type="button"
                 onClick={resetForm}
-                className="rounded-md border border-stone-300 px-4 py-2 text-sm font-medium text-ink transition hover:border-pine hover:text-pine"
+                className="min-h-11 rounded-md border border-stone-300 px-4 py-2 text-sm font-medium text-ink transition hover:border-pine hover:text-pine"
               >
                 取消
               </button>
@@ -681,13 +731,13 @@ export function IncomeManager({
                 "该功能预留中，后续将支持上传截图后自动识别金额、日期和来源，人工确认后生成收入记录。"
               )
             }
-            className="mt-3 rounded-md border border-stone-300 px-4 py-2 text-sm font-medium text-ink transition hover:border-pine hover:text-pine"
+            className="mt-3 min-h-11 rounded-md border border-stone-300 px-4 py-2 text-sm font-medium text-stone-600 transition hover:border-pine hover:text-pine"
           >
             凭证识别录入（预留）
           </button>
         </form>
 
-        <div className="rounded-xl border border-slate-200 bg-white shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
+        <div className="min-w-0 rounded-xl border border-slate-200 bg-white shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
           <div className="flex items-center justify-between border-b border-stone-200 px-5 py-4">
             <h3 className="text-lg font-semibold text-ink">收入列表</h3>
             <button
@@ -699,7 +749,7 @@ export function IncomeManager({
             </button>
           </div>
 
-          <div className="overflow-x-auto">
+          <div className="hidden overflow-x-auto md:block">
             <table className="min-w-full divide-y divide-stone-200 text-sm">
               <thead className="bg-slate-50 text-left text-slate-600">
                 <tr>
@@ -805,6 +855,108 @@ export function IncomeManager({
                 )}
               </tbody>
             </table>
+          </div>
+
+          <div className="space-y-3 p-4 md:hidden">
+            {isLoading ? (
+              <p className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-5 text-sm text-stone-500">
+                正在读取收入数据...
+              </p>
+            ) : incomes.length === 0 ? (
+              <p className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-5 text-sm text-stone-500">
+                当前月份暂无收入记录。
+              </p>
+            ) : (
+              incomes.map((income) => (
+                <article
+                  id={`income-mobile-${income.id}`}
+                  key={income.id}
+                  className={`rounded-xl border border-slate-200 bg-white p-4 transition-colors ${
+                    highlightedId === income.id
+                      ? "bg-pine/10 ring-2 ring-inset ring-pine/40"
+                      : ""
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-ink">
+                        {getIncomeSourceLabel(income.source)}
+                      </p>
+                      <p className="mt-1 text-xs text-stone-500">{income.date}</p>
+                    </div>
+                    <p className="shrink-0 text-base font-bold text-ink">
+                      {formatMoney(income.net_amount)}
+                    </p>
+                  </div>
+
+                  <dl className="mt-4 grid grid-cols-1 gap-3 text-sm">
+                    <div className="flex justify-between gap-4">
+                      <dt className="shrink-0 text-stone-500">收入总额</dt>
+                      <dd className="break-words text-right text-stone-700">
+                        {formatMoney(income.gross_amount)}
+                      </dd>
+                    </div>
+                    <div className="flex justify-between gap-4">
+                      <dt className="shrink-0 text-stone-500">手续费</dt>
+                      <dd className="break-words text-right text-stone-700">
+                        {formatMoney(income.fee_amount)}
+                      </dd>
+                    </div>
+                    <div className="flex justify-between gap-4">
+                      <dt className="shrink-0 text-stone-500">结算周期</dt>
+                      <dd className="break-words text-right text-stone-700">
+                        {formatSettlementPeriod(income.settlement_period)}
+                      </dd>
+                    </div>
+                    <div className="flex justify-between gap-4">
+                      <dt className="shrink-0 text-stone-500">凭证状态</dt>
+                      <dd className="text-right">
+                        {income.evidence_file ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              void handleViewEvidence(income.evidence_file!)
+                            }
+                            className="font-medium text-pine hover:text-ink"
+                          >
+                            已上传凭证
+                          </button>
+                        ) : (
+                          <span className="text-stone-400">暂无凭证</span>
+                        )}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-stone-500">备注</dt>
+                      <dd className="mt-1 whitespace-pre-wrap break-words text-stone-700">
+                        {income.note || "-"}
+                      </dd>
+                    </div>
+                  </dl>
+
+                  {canManageIncome ? (
+                    <div className="mt-4 flex flex-wrap gap-3">
+                      <button
+                        type="button"
+                        onClick={() => startEdit(income)}
+                        disabled={isMonthLocked}
+                        className="min-h-11 rounded-md border border-stone-300 px-4 py-2 text-sm font-medium text-ink transition hover:border-pine hover:text-pine disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        编辑
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleDelete(income)}
+                        disabled={isMonthLocked}
+                        className="min-h-11 rounded-md border border-red-200 px-4 py-2 text-sm font-medium text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        删除
+                      </button>
+                    </div>
+                  ) : null}
+                </article>
+              ))
+            )}
           </div>
         </div>
       </div>
