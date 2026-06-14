@@ -551,44 +551,46 @@ export function HomeDashboard({
             </span>
           </div>
         </div>
-        <div className="mt-6 grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4 xl:grid-cols-6">
-          {trendData.data.map((item) => {
-            const incomeHeight =
-              trendData.maxAmount > BigInt(0)
-                ? Math.max(8, Math.round((Number(item.income) / Number(trendData.maxAmount)) * 100))
-                : 0;
-            const expenseHeight =
-              trendData.maxAmount > BigInt(0)
-                ? Math.max(8, Math.round((Number(item.expense) / Number(trendData.maxAmount)) * 100))
-                : 0;
+        <div className="mt-6 -mx-1 overflow-x-auto px-1 md:mx-0 md:overflow-visible md:px-0">
+          <div className="grid min-w-[720px] grid-cols-6 gap-3 md:min-w-0 md:grid-cols-3 md:gap-4 xl:grid-cols-6">
+            {trendData.data.map((item) => {
+              const incomeHeight =
+                trendData.maxAmount > BigInt(0)
+                  ? Math.max(8, Math.round((Number(item.income) / Number(trendData.maxAmount)) * 100))
+                  : 0;
+              const expenseHeight =
+                trendData.maxAmount > BigInt(0)
+                  ? Math.max(8, Math.round((Number(item.expense) / Number(trendData.maxAmount)) * 100))
+                  : 0;
 
-            return (
-              <div key={item.month} className="min-w-0 rounded-lg bg-slate-50 px-3 py-3">
-                <div className="flex h-28 items-end justify-center gap-3 sm:h-36">
-                  <div className="flex h-full w-7 items-end rounded-full bg-white">
-                    <div
-                      className="w-full rounded-full bg-pine"
-                      style={{ height: `${incomeHeight}%` }}
-                    />
+              return (
+                <div key={item.month} className="min-w-0 rounded-lg bg-slate-50 px-3 py-3">
+                  <div className="flex h-32 items-end justify-center gap-3 md:h-36">
+                    <div className="flex h-full w-7 items-end rounded-full bg-white">
+                      <div
+                        className="w-full rounded-full bg-pine"
+                        style={{ height: `${incomeHeight}%` }}
+                      />
+                    </div>
+                    <div className="flex h-full w-7 items-end rounded-full bg-white">
+                      <div
+                        className="w-full rounded-full bg-slateblue"
+                        style={{ height: `${expenseHeight}%` }}
+                      />
+                    </div>
                   </div>
-                  <div className="flex h-full w-7 items-end rounded-full bg-white">
-                    <div
-                      className="w-full rounded-full bg-slateblue"
-                      style={{ height: `${expenseHeight}%` }}
-                    />
+                  <p className="mt-3 text-center text-sm font-semibold text-ink">
+                    {item.month}
+                  </p>
+                  <div className="mt-2 space-y-1 break-words text-xs text-slate-500">
+                    <p>收入：{formatMoney(item.income, false)}</p>
+                    <p>支出：{formatMoney(item.expense, false)}</p>
+                    <p>净利润：{formatMoney(item.netProfit, false)}</p>
                   </div>
                 </div>
-                <p className="mt-3 text-center text-sm font-semibold text-ink">
-                  {item.month}
-                </p>
-                <div className="mt-2 space-y-1 break-words text-xs text-slate-500">
-                  <p>收入：{formatMoney(item.income, false)}</p>
-                  <p>支出：{formatMoney(item.expense, false)}</p>
-                  <p>净利润：{formatMoney(item.netProfit, false)}</p>
-                </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
       </div>
 
