@@ -494,7 +494,7 @@ export function HomeDashboard({
         : reminders;
 
   return (
-    <section>
+    <section className="min-w-0">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <h2 className="text-2xl font-bold text-ink">Hidden Hotel 财务管理</h2>
@@ -515,24 +515,24 @@ export function HomeDashboard({
       ) : null}
 
       <div
-        className={`mt-6 grid gap-4 sm:grid-cols-2 ${
+        className={`mt-6 grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 ${
           operationCards.length === 3 ? "xl:grid-cols-3" : "xl:grid-cols-4"
         }`}
       >
         {operationCards.map((card) => (
           <div
             key={card.label}
-            className="rounded-xl border border-slate-200 bg-white p-5 shadow-[0_8px_24px_rgba(15,23,42,0.04)]"
+            className="min-w-0 rounded-xl border border-slate-200 bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.04)] sm:p-5"
           >
             <p className="text-sm font-medium text-slate-500">{card.label}</p>
-            <p className="mt-3 text-2xl font-semibold text-ink">
+            <p className="mt-3 break-words text-xl font-semibold text-ink sm:text-2xl">
               {card.value}
             </p>
           </div>
         ))}
       </div>
 
-      <div className="mt-6 rounded-xl border border-slate-200 bg-white p-5 shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
+      <div className="mt-6 min-w-0 rounded-xl border border-slate-200 bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.04)] sm:p-5">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h3 className="text-lg font-semibold text-ink">月收入支出趋势</h3>
@@ -551,7 +551,7 @@ export function HomeDashboard({
             </span>
           </div>
         </div>
-        <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-6">
+        <div className="mt-6 grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4 xl:grid-cols-6">
           {trendData.data.map((item) => {
             const incomeHeight =
               trendData.maxAmount > BigInt(0)
@@ -563,8 +563,8 @@ export function HomeDashboard({
                 : 0;
 
             return (
-              <div key={item.month} className="rounded-lg bg-slate-50 px-3 py-3">
-                <div className="flex h-36 items-end justify-center gap-3">
+              <div key={item.month} className="min-w-0 rounded-lg bg-slate-50 px-3 py-3">
+                <div className="flex h-28 items-end justify-center gap-3 sm:h-36">
                   <div className="flex h-full w-7 items-end rounded-full bg-white">
                     <div
                       className="w-full rounded-full bg-pine"
@@ -581,7 +581,7 @@ export function HomeDashboard({
                 <p className="mt-3 text-center text-sm font-semibold text-ink">
                   {item.month}
                 </p>
-                <div className="mt-2 space-y-1 text-xs text-slate-500">
+                <div className="mt-2 space-y-1 break-words text-xs text-slate-500">
                   <p>收入：{formatMoney(item.income, false)}</p>
                   <p>支出：{formatMoney(item.expense, false)}</p>
                   <p>净利润：{formatMoney(item.netProfit, false)}</p>
@@ -593,14 +593,14 @@ export function HomeDashboard({
       </div>
 
       {investmentCards.length > 0 ? (
-        <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="mt-6 grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-4">
           {investmentCards.map((card) => (
             <div
               key={card.label}
-              className="rounded-xl border border-slate-200 bg-white p-5 shadow-[0_8px_24px_rgba(15,23,42,0.04)]"
+              className="min-w-0 rounded-xl border border-slate-200 bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.04)] sm:p-5"
             >
               <p className="text-sm font-medium text-slate-500">{card.label}</p>
-              <p className="mt-3 text-2xl font-semibold text-ink">
+              <p className="mt-3 break-words text-xl font-semibold text-ink sm:text-2xl">
                 {card.value}
               </p>
             </div>
@@ -609,12 +609,12 @@ export function HomeDashboard({
       ) : null}
 
       {currentRole === "admin" || currentRole === "operator" ? (
-        <div className="mt-6 rounded-xl border border-slate-200 bg-white p-5 shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
+        <div className="mt-6 min-w-0 rounded-xl border border-slate-200 bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.04)] sm:p-5">
           <h3 className="text-lg font-semibold text-ink">经营提醒</h3>
           {hasReminder ? (
-            <ul className="mt-4 grid gap-3 text-sm text-stone-700 sm:grid-cols-2 xl:grid-cols-3">
+            <ul className="mt-4 grid min-w-0 grid-cols-1 gap-3 text-sm text-stone-700 sm:grid-cols-2 xl:grid-cols-3">
               {visibleReminders.map((item) => (
-                <li key={item} className="rounded-lg bg-slate-50 px-3 py-2">
+                <li key={item} className="min-w-0 break-words rounded-lg bg-slate-50 px-3 py-2">
                   {item}
                 </li>
               ))}
