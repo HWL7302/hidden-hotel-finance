@@ -3,12 +3,14 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { MonthInput } from "@/components/DateInputs";
 import {
+  expenseCategoryOptions,
   getExpenseCategoryLabel,
-  getIncomeSourceLabel
+  getIncomeSourceLabel,
+  incomeSourceOptions
 } from "@/lib/finance-options";
 import type { AppRole } from "@/lib/permissions";
 import { createClient } from "@/lib/supabase-client";
-import * as XLSX from "xlsx";
+import * as XLSX from "xlsx-js-style";
 
 type IncomeRecord = {
   date: string;
@@ -181,6 +183,249 @@ function appendHorizontalSummarySheet({
     ["金额", totalIncome, totalExpense, totalNetProfit]
   ]);
   XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+}
+
+function formatReportMonth(month: string) {
+  const [year, monthNumber] = month.split("-");
+  return `${year}年${Number(monthNumber)}月`;
+}
+
+function buildOperationSummaryTitle(startMonth: string, endMonth: string) {
+  const period =
+    startMonth === endMonth
+      ? formatReportMonth(startMonth)
+      : `${formatReportMonth(startMonth)}-${formatReportMonth(endMonth)}`;
+
+  return `${period}隐藏款电竞酒店经营情况汇总表`;
+}
+
+function sumByValue<T>(
+  records: T[],
+  value: string,
+  readKey: (record: T) => string,
+  readAmount: (record: T) => string | number | null | undefined
+) {
+  return sumAmounts(
+    records.filter((record) => readKey(record) === value),
+    readAmount
+  );
+}
+
+function appendOperationSummarySheet({
+  workbook,
+  startMonth,
+  endMonth,
+  incomes,
+  expenses,
+  cumulativeNetProfit
+}: {
+  workbook: XLSX.WorkBook;
+  startMonth: string;
+  endMonth: string;
+  incomes: IncomeRecord[];
+  expenses: ExpenseRecord[];
+  cumulativeNetProfit: number;
+}) {
+  const fixedCostCategories = [
+    "rent",
+    "salary",
+    "utilities",
+    "network",
+    "game_membership"
+  ];
+  const dailyExpenseCategories = [
+    "cleaning_supplies",
+    "repair",
+    "platform_promotion",
+    "other"
+  ];
+  const dailyOtherCategories = new Set([
+    ...dailyExpenseCategories,
+    ...expenseCategoryOptions
+      .map((option) => option.value)
+      .filter((value) => !fixedCostCategories.includes(value))
+  ]);
+  const totalGrossIncome = sumAmounts(incomes, (income) => income.gross_amount);
+  const totalFee = sumAmounts(incomes, (income) => income.fee_amount);
+  const totalNetIncome = sumAmounts(incomes, (income) => income.net_amount);
+  const fixedCostTotal = sumAmounts(
+    expenses.filter((expense) => fixedCostCategories.includes(expense.category)),
+    (expense) => expense.amount
+  );
+  const dailyExpenseTotal = sumAmounts(
+    expenses.filter((expense) => dailyOtherCategories.has(expense.category)),
+    (expense) => expense.amount
+  );
+  const totalExpense = roundMoney(fixedCostTotal + dailyExpenseTotal);
+  const netProfit = roundMoney(totalNetIncome - totalExpense);
+  const profitRate = totalNetIncome === 0 ? "-" : netProfit / totalNetIncome;
+  const rows: (string | number | null)[][] = [
+    [buildOperationSummaryTitle(startMonth, endMonth), null, null, null],
+    ["序号", "编制单位：隐藏款电竞酒店", "单位：元", "备注"],
+    [null, "一、收入项目", null, null]
+  ];
+
+  incomeSourceOptions.forEach((option, index) => {
+    rows.push([
+      index + 1,
+      option.label,
+      sumByValue(
+        incomes,
+        option.value,
+        (income) => income.source,
+        (income) => income.gross_amount
+      ),
+      ""
+    ]);
+  });
+
+  rows.push(
+    [incomeSourceOptions.length + 1, "合计营业额", totalGrossIncome, ""],
+    [incomeSourceOptions.length + 2, "手续费", totalFee, ""],
+    [
+      incomeSourceOptions.length + 3,
+      "本期实际收入",
+      totalNetIncome,
+      "收入净额 = 合计营业额 - 手续费"
+    ],
+    [null, "二、固定经营成本", null, null]
+  );
+
+  fixedCostCategories.forEach((category, index) => {
+    rows.push([
+      index + 1,
+      getExpenseCategoryLabel(category),
+      sumByValue(
+        expenses,
+        category,
+        (expense) => expense.category,
+        (expense) => expense.amount
+      ),
+      ""
+    ]);
+  });
+
+  rows.push(
+    [fixedCostCategories.length + 1, "固定成本合计", fixedCostTotal, ""],
+    [null, "三、日常经营费用", null, null]
+  );
+
+  dailyExpenseCategories.forEach((category, index) => {
+    const amount =
+      category === "other"
+        ? sumAmounts(
+            expenses.filter((expense) => dailyOtherCategories.has(expense.category)),
+            (expense) => expense.amount
+          ) -
+          sumAmounts(
+            expenses.filter(
+              (expense) =>
+                dailyExpenseCategories.includes(expense.category) &&
+                expense.category !== "other"
+            ),
+            (expense) => expense.amount
+          )
+        : sumByValue(
+            expenses,
+            category,
+            (expense) => expense.category,
+            (expense) => expense.amount
+          );
+
+    rows.push([index + 1, getExpenseCategoryLabel(category), roundMoney(amount), ""]);
+  });
+
+  rows.push(
+    [dailyExpenseCategories.length + 1, "日常费用合计", dailyExpenseTotal, ""],
+    [null, "四、经营利润汇总", null, null],
+    ["", "本期实际收入", totalNetIncome, ""],
+    ["", "本期支出合计", totalExpense, "固定成本合计 + 日常费用合计"],
+    ["", "本期净利润", netProfit, "本期实际收入 - 本期支出合计"],
+    ["", "经营利润率", profitRate, totalNetIncome === 0 ? "本期实际收入为 0" : ""],
+    ["", "截至结束月份累计净利润", cumulativeNetProfit, `截至 ${endMonth} 统计`]
+  );
+
+  const worksheet = XLSX.utils.aoa_to_sheet(rows);
+  worksheet["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 3 } }];
+  worksheet["!cols"] = [
+    { wch: 8 },
+    { wch: 28 },
+    { wch: 16 },
+    { wch: 36 }
+  ];
+
+  const sectionRows: number[] = [];
+  const totalRows: number[] = [];
+  rows.forEach((row, index) => {
+    const project = String(row[1] ?? "");
+    if (/^[一二三四]、/.test(project)) {
+      sectionRows.push(index);
+    }
+    if (
+      project.includes("合计") ||
+      project === "本期实际收入" ||
+      project === "本期净利润" ||
+      project === "截至结束月份累计净利润"
+    ) {
+      totalRows.push(index);
+    }
+  });
+
+  const setCellStyle = (row: number, column: number, style: XLSX.CellObject["s"]) => {
+    const address = XLSX.utils.encode_cell({ r: row, c: column });
+    const cell = worksheet[address];
+    if (cell) {
+      cell.s = { ...(cell.s ?? {}), ...style };
+    }
+  };
+
+  setCellStyle(0, 0, {
+    font: { bold: true, sz: 16 },
+    alignment: { horizontal: "center", vertical: "center" }
+  });
+
+  for (let column = 0; column <= 3; column += 1) {
+    setCellStyle(1, column, {
+      font: { bold: true },
+      alignment: { horizontal: column === 2 ? "right" : "left", vertical: "center" }
+    });
+  }
+
+  sectionRows.forEach((row) => {
+    for (let column = 0; column <= 3; column += 1) {
+      setCellStyle(row, column, {
+        font: { bold: true },
+        fill: { fgColor: { rgb: "F3F4F6" } }
+      });
+    }
+  });
+
+  totalRows.forEach((row) => {
+    for (let column = 0; column <= 3; column += 1) {
+      setCellStyle(row, column, { font: { bold: true } });
+    }
+  });
+
+  for (let row = 0; row < rows.length; row += 1) {
+    const amountCell = worksheet[XLSX.utils.encode_cell({ r: row, c: 2 })];
+    if (amountCell && typeof amountCell.v === "number") {
+      amountCell.z = rows[row][1] === "经营利润率" ? "0.00%" : "#,##0.00";
+    }
+
+    setCellStyle(row, 2, {
+      numFmt: rows[row][1] === "经营利润率" ? "0.00%" : "#,##0.00",
+      alignment: { horizontal: "right", vertical: "center" }
+    });
+    setCellStyle(row, 3, {
+      alignment: { wrapText: true, vertical: "center" }
+    });
+  }
+
+  worksheet["!ref"] = XLSX.utils.encode_range({
+    s: { r: 0, c: 0 },
+    e: { r: rows.length - 1, c: 3 }
+  });
+  XLSX.utils.book_append_sheet(workbook, worksheet, "经营汇总");
 }
 
 function downloadWorkbook(workbook: XLSX.WorkBook, fileName: string) {
@@ -502,7 +747,11 @@ export function ReportExportManager({
     return true;
   }
 
-  async function fetchOperationData(startMonth: string, endMonth: string) {
+  async function fetchOperationData(
+    startMonth: string,
+    endMonth: string,
+    options: { includeCumulativeNetProfit?: boolean } = {}
+  ) {
     if (!effectiveStoreId) {
       throw new Error("当前用户没有绑定 store_id，无法导出报表。");
     }
@@ -531,9 +780,45 @@ export function ReportExportManager({
       throw loadError;
     }
 
+    let cumulativeNetProfit = 0;
+
+    if (options.includeCumulativeNetProfit) {
+      const cumulativeRange = getMonthRange("1900-01", endMonth);
+      const [cumulativeIncomeResult, cumulativeExpenseResult] = await Promise.all([
+        supabase
+          .from("incomes")
+          .select("date,source,gross_amount,fee_amount,net_amount,settlement_period,note")
+          .eq("store_id", effectiveStoreId)
+          .gte("settlement_period", cumulativeRange.start)
+          .lt("settlement_period", cumulativeRange.end),
+        supabase
+          .from("expenses")
+          .select("date,category,payee,amount,included_in_monthly_cost,note")
+          .eq("store_id", effectiveStoreId)
+          .gte("date", cumulativeRange.start)
+          .lt("date", cumulativeRange.end)
+          .order("date", { ascending: true })
+      ]);
+
+      const cumulativeLoadError =
+        cumulativeIncomeResult.error ?? cumulativeExpenseResult.error;
+
+      if (cumulativeLoadError) {
+        throw cumulativeLoadError;
+      }
+
+      const cumulativeIncomes = (cumulativeIncomeResult.data ?? []) as IncomeRecord[];
+      const cumulativeExpenses = (cumulativeExpenseResult.data ?? []) as ExpenseRecord[];
+      cumulativeNetProfit = roundMoney(
+        sumAmounts(cumulativeIncomes, (income) => income.net_amount) -
+          sumAmounts(cumulativeExpenses, (expense) => expense.amount)
+      );
+    }
+
     return {
       incomes: (incomeResult.data ?? []) as IncomeRecord[],
-      expenses: (expenseResult.data ?? []) as ExpenseRecord[]
+      expenses: (expenseResult.data ?? []) as ExpenseRecord[],
+      cumulativeNetProfit
     };
   }
 
@@ -556,16 +841,17 @@ export function ReportExportManager({
     startMonth,
     endMonth,
     incomes,
-    expenses
+    expenses,
+    cumulativeNetProfit
   }: {
     startMonth: string;
     endMonth: string;
     incomes: IncomeRecord[];
     expenses: ExpenseRecord[];
+    cumulativeNetProfit: number;
   }) {
     const workbook = XLSX.utils.book_new();
-    const { costExpenses, totalIncome, totalExpense, totalNetProfit } =
-      getOperationTotals(incomes, expenses);
+    const { costExpenses } = getOperationTotals(incomes, expenses);
     const monthRows = buildMonthList(startMonth, endMonth).map((month) => {
       const monthlyIncome = sumAmounts(
         incomes.filter((income) => income.settlement_period.slice(0, 7) === month),
@@ -584,14 +870,13 @@ export function ReportExportManager({
       };
     });
 
-    appendHorizontalSummarySheet({
+    appendOperationSummarySheet({
       workbook,
-      sheetName: "经营汇总",
       startMonth,
       endMonth,
-      totalIncome,
-      totalExpense,
-      totalNetProfit
+      incomes,
+      expenses,
+      cumulativeNetProfit
     });
     appendSheet(
       workbook,
@@ -639,7 +924,9 @@ export function ReportExportManager({
         return;
       }
 
-      const data = await fetchOperationData(operationStartMonth, operationEndMonth);
+      const data = await fetchOperationData(operationStartMonth, operationEndMonth, {
+        includeCumulativeNetProfit: true
+      });
       const workbook = buildOperationWorkbook({
         startMonth: operationStartMonth,
         endMonth: operationEndMonth,
