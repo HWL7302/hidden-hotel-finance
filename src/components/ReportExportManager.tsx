@@ -531,6 +531,22 @@ function appendOperationSummarySheet({
   setCellStyle(2, 3, {
     alignment: { horizontal: "center", vertical: "center" }
   });
+  if (worksheet.C3) {
+    worksheet.C3.v = "金额";
+    worksheet.C3.t = "s";
+    worksheet.C3.s = {
+      ...(worksheet.C3.s ?? {}),
+      alignment: { horizontal: "center", vertical: "center" }
+    };
+  }
+  if (worksheet.D3) {
+    worksheet.D3.v = "备注";
+    worksheet.D3.t = "s";
+    worksheet.D3.s = {
+      ...(worksheet.D3.s ?? {}),
+      alignment: { horizontal: "center", vertical: "center" }
+    };
+  }
   XLSX.utils.book_append_sheet(workbook, worksheet, "经营汇总");
 }
 
