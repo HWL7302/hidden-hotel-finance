@@ -154,6 +154,7 @@ const moneyFormatter = new Intl.NumberFormat("zh-CN", {
   minimumFractionDigits: 0,
   maximumFractionDigits: 2
 });
+const operationReportAccentFill = "E6F4F1";
 
 function formatMoney(value: string | number | null | undefined) {
   return moneyFormatter.format(roundMoney(parseAmount(value)));
@@ -472,7 +473,7 @@ function appendOperationSummarySheet({
   for (let column = 0; column <= 3; column += 1) {
     setCellStyle(2, column, {
       font: { name: "Microsoft YaHei", bold: true, sz: 11 },
-      fill: { fgColor: { rgb: "E5E7EB" } },
+      fill: { fgColor: { rgb: operationReportAccentFill } },
       alignment: { horizontal: "center", vertical: "center" }
     });
   }
@@ -481,7 +482,7 @@ function appendOperationSummarySheet({
     for (let column = 0; column <= 3; column += 1) {
       setCellStyle(row, column, {
         font: { name: "Microsoft YaHei", bold: true, sz: 11 },
-        fill: { fgColor: { rgb: "FAFAFA" } }
+        fill: { fgColor: { rgb: operationReportAccentFill } }
       });
     }
   });
@@ -490,7 +491,7 @@ function appendOperationSummarySheet({
     for (let column = 0; column <= 3; column += 1) {
       setCellStyle(row, column, {
         font: { name: "Microsoft YaHei", bold: true, sz: 11 },
-        fill: { fgColor: { rgb: "F3F4F6" } },
+        fill: { fgColor: { rgb: operationReportAccentFill } },
         alignment: { horizontal: "left", vertical: "center" }
       });
     }
@@ -592,12 +593,12 @@ function appendOperationDetailSheet({
   for (let column = 0; column <= lastColumn; column += 1) {
     setCellStyle(0, column, {
       font: { name: "Microsoft YaHei", bold: true, sz: 11 },
-      fill: { fgColor: { rgb: "E5E7EB" } },
+      fill: { fgColor: { rgb: operationReportAccentFill } },
       alignment: { horizontal: "center", vertical: "center" }
     });
     setCellStyle(lastRow, column, {
       font: { name: "Microsoft YaHei", bold: true, sz: 11 },
-      fill: { fgColor: { rgb: "FAFAFA" } },
+      fill: { fgColor: { rgb: operationReportAccentFill } },
       alignment: {
         horizontal: amountColumns.includes(column) ? "right" : "left",
         vertical: "center",
@@ -1068,18 +1069,18 @@ export function ReportExportManager({
       workbook,
       sheetName: "支出明细",
       rows: [
-        ["日期", "类别", "收款方", "金额", "备注"],
+        ["日期", "类别", "金额", "收款方", "备注"],
         ...expenses.map((expense) => [
           expense.date,
           getExpenseCategoryLabel(expense.category),
-          expense.payee ?? "",
           formatMoney(expense.amount),
+          expense.payee ?? "",
           expense.note ?? ""
         ]),
-        ["", "合计", "", formatMoney(expenseTotal), ""]
+        ["", "合计", formatMoney(expenseTotal), "", ""]
       ],
-      columnWidths: [14, 18, 22, 14, 30],
-      amountColumns: [3],
+      columnWidths: [14, 18, 14, 22, 30],
+      amountColumns: [2],
       wrapColumns: [4]
     });
 
