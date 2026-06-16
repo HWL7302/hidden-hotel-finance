@@ -154,7 +154,8 @@ const moneyFormatter = new Intl.NumberFormat("zh-CN", {
   minimumFractionDigits: 0,
   maximumFractionDigits: 2
 });
-const operationReportAccentFill = "E6F4F1";
+const operationReportHeaderFill = "E6F4F1";
+const operationReportSectionFill = "F0FAF7";
 
 function formatMoney(value: string | number | null | undefined) {
   return moneyFormatter.format(roundMoney(parseAmount(value)));
@@ -473,7 +474,7 @@ function appendOperationSummarySheet({
   for (let column = 0; column <= 3; column += 1) {
     setCellStyle(2, column, {
       font: { name: "Microsoft YaHei", bold: true, sz: 11 },
-      fill: { fgColor: { rgb: operationReportAccentFill } },
+      fill: { fgColor: { rgb: operationReportHeaderFill } },
       alignment: { horizontal: "center", vertical: "center" }
     });
   }
@@ -482,7 +483,7 @@ function appendOperationSummarySheet({
     for (let column = 0; column <= 3; column += 1) {
       setCellStyle(row, column, {
         font: { name: "Microsoft YaHei", bold: true, sz: 11 },
-        fill: { fgColor: { rgb: operationReportAccentFill } }
+        fill: { fgColor: { rgb: operationReportSectionFill } }
       });
     }
   });
@@ -491,7 +492,7 @@ function appendOperationSummarySheet({
     for (let column = 0; column <= 3; column += 1) {
       setCellStyle(row, column, {
         font: { name: "Microsoft YaHei", bold: true, sz: 11 },
-        fill: { fgColor: { rgb: operationReportAccentFill } },
+        fill: { fgColor: { rgb: operationReportSectionFill } },
         alignment: { horizontal: "left", vertical: "center" }
       });
     }
@@ -524,6 +525,12 @@ function appendOperationSummarySheet({
       alignment: { horizontal: "left", wrapText: true, vertical: "center" }
     });
   }
+  setCellStyle(2, 2, {
+    alignment: { horizontal: "center", vertical: "center" }
+  });
+  setCellStyle(2, 3, {
+    alignment: { horizontal: "center", vertical: "center" }
+  });
   XLSX.utils.book_append_sheet(workbook, worksheet, "经营汇总");
 }
 
@@ -593,12 +600,12 @@ function appendOperationDetailSheet({
   for (let column = 0; column <= lastColumn; column += 1) {
     setCellStyle(0, column, {
       font: { name: "Microsoft YaHei", bold: true, sz: 11 },
-      fill: { fgColor: { rgb: operationReportAccentFill } },
+      fill: { fgColor: { rgb: operationReportHeaderFill } },
       alignment: { horizontal: "center", vertical: "center" }
     });
     setCellStyle(lastRow, column, {
       font: { name: "Microsoft YaHei", bold: true, sz: 11 },
-      fill: { fgColor: { rgb: operationReportAccentFill } },
+      fill: { fgColor: { rgb: operationReportSectionFill } },
       alignment: {
         horizontal: amountColumns.includes(column) ? "right" : "left",
         vertical: "center",
