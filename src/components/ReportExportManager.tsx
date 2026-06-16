@@ -196,7 +196,7 @@ function buildOperationSummaryTitle(startMonth: string, endMonth: string) {
       ? formatReportMonth(startMonth)
       : `${formatReportMonth(startMonth)}-${formatReportMonth(endMonth)}`;
 
-  return `${period}隐藏款电竞酒店经营情况汇总表`;
+  return `${period} 隐藏款电竞酒店经营情况汇总表`;
 }
 
 function sumByValue<T>(
@@ -258,11 +258,12 @@ function appendOperationSummarySheet({
   );
   const totalExpense = roundMoney(fixedCostTotal + dailyExpenseTotal);
   const netProfit = roundMoney(totalNetIncome - totalExpense);
-  const profitRate = totalNetIncome === 0 ? "-" : netProfit / totalNetIncome;
+  const profitRate = totalNetIncome === 0 ? "*" : netProfit / totalNetIncome;
   const rows: (string | number | null)[][] = [
     [buildOperationSummaryTitle(startMonth, endMonth), null, null, null],
-    ["序号", "编制单位：隐藏款电竞酒店", "单位：元", "备注"],
-    [null, "一、收入项目", null, null]
+    ["编制单位：隐藏款电竞酒店", null, "单位：元", null],
+    ["序号", "项目", "金额", "备注"],
+    ["一、收入项目", null, null, null]
   ];
 
   incomeSourceOptions.forEach((option, index) => {
@@ -288,7 +289,7 @@ function appendOperationSummarySheet({
       totalNetIncome,
       "收入净额 = 合计营业额 - 手续费"
     ],
-    [null, "二、固定经营成本", null, null]
+    ["二、固定经营成本", null, null, null]
   );
 
   fixedCostCategories.forEach((category, index) => {
@@ -307,7 +308,7 @@ function appendOperationSummarySheet({
 
   rows.push(
     [fixedCostCategories.length + 1, "固定成本合计", fixedCostTotal, ""],
-    [null, "三、日常经营费用", null, null]
+    ["三、日常经营费用", null, null, null]
   );
 
   dailyExpenseCategories.forEach((category, index) => {
@@ -337,7 +338,7 @@ function appendOperationSummarySheet({
 
   rows.push(
     [dailyExpenseCategories.length + 1, "日常费用合计", dailyExpenseTotal, ""],
-    [null, "四、经营利润汇总", null, null],
+    ["四、经营利润汇总", null, null, null],
     ["", "本期实际收入", totalNetIncome, ""],
     ["", "本期支出合计", totalExpense, "固定成本合计 + 日常费用合计"],
     ["", "本期净利润", netProfit, "本期实际收入 - 本期支出合计"],
@@ -346,30 +347,90 @@ function appendOperationSummarySheet({
   );
 
   const worksheet = XLSX.utils.aoa_to_sheet(rows);
-  worksheet["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 3 } }];
-  worksheet["!cols"] = [
-    { wch: 8 },
-    { wch: 28 },
-    { wch: 16 },
-    { wch: 36 }
-  ];
-
   const sectionRows: number[] = [];
   const totalRows: number[] = [];
   rows.forEach((row, index) => {
+    const section = String(row[0] ?? "");
     const project = String(row[1] ?? "");
-    if (/^[一二三四]、/.test(project)) {
+    if (/^[一二三四]、/.test(section)) {
       sectionRows.push(index);
     }
     if (
       project.includes("合计") ||
       project === "本期实际收入" ||
+      project === "本期支出合计" ||
       project === "本期净利润" ||
+      project === "经营利润率" ||
       project === "截至结束月份累计净利润"
     ) {
       totalRows.push(index);
     }
   });
+
+  worksheet["!merges"] = [
+    { s: { r: 0, c: 0 }, e: { r: 0, c: 3 } },
+    { s: { r: 1, c: 0 }, e: { r: 1, c: 1 } },
+    { s: { r: 1, c: 2 }, e: { r: 1, c: 3 } },
+    ...sectionRows.map((row) => ({
+      s: { r: row, c: 0 },
+      e: { r: row, c: 3 }
+    }))
+  ];
+  worksheet["!cols"] = [
+    { wch: 8 },
+    { wch: 28 },
+    { wch: 16 },
+    { wch: 42 }
+  ];
+  worksheet["!rows"] = rows.map((_, index) => ({
+    hpt: index === 0 ? 28 : sectionRows.includes(index) ? 22 : 20
+  }));
+  worksheet["!margins"] = {
+    left: 0.5,
+    right: 0.5,
+    top: 0.6,
+    bottom: 0.6,
+    header: 0.3,
+    footer: 0.3
+  };
+  (worksheet as XLSX.WorkSheet & {
+    "!pageSetup"?: {
+      orientation?: string;
+      fitToWidth?: number;
+      fitToHeight?: number;
+    };
+    "!printArea"?: string;
+  })["!pageSetup"] = {
+    orientation: "portrait",
+    fitToWidth: 1,
+    fitToHeight: 0
+  };
+  (worksheet as XLSX.WorkSheet & { "!printArea"?: string })["!printArea"] =
+    `A1:D${rows.length}`;
+
+  worksheet["!ref"] = XLSX.utils.encode_range({
+    s: { r: 0, c: 0 },
+    e: { r: rows.length - 1, c: 3 }
+  });
+
+  for (let row = 0; row < rows.length; row += 1) {
+    for (let column = 0; column <= 3; column += 1) {
+      const address = XLSX.utils.encode_cell({ r: row, c: column });
+      worksheet[address] ??= { t: "s", v: "" };
+    }
+  }
+
+  const thinBorder = {
+    top: { style: "thin", color: { rgb: "D9D9D9" } },
+    bottom: { style: "thin", color: { rgb: "D9D9D9" } },
+    left: { style: "thin", color: { rgb: "D9D9D9" } },
+    right: { style: "thin", color: { rgb: "D9D9D9" } }
+  };
+  const baseCellStyle: XLSX.CellObject["s"] = {
+    font: { name: "Microsoft YaHei", sz: 11 },
+    border: thinBorder,
+    alignment: { vertical: "center" }
+  };
 
   const setCellStyle = (row: number, column: number, style: XLSX.CellObject["s"]) => {
     const address = XLSX.utils.encode_cell({ r: row, c: column });
@@ -379,52 +440,80 @@ function appendOperationSummarySheet({
     }
   };
 
+  for (let row = 0; row < rows.length; row += 1) {
+    for (let column = 0; column <= 3; column += 1) {
+      setCellStyle(row, column, baseCellStyle);
+    }
+  }
+
   setCellStyle(0, 0, {
-    font: { bold: true, sz: 16 },
+    font: { name: "Microsoft YaHei", bold: true, sz: 16 },
+    alignment: { horizontal: "center", vertical: "center" }
+  });
+
+  setCellStyle(1, 0, {
+    font: { name: "Microsoft YaHei", bold: true, sz: 11 },
+    alignment: { horizontal: "center", vertical: "center" }
+  });
+  setCellStyle(1, 2, {
+    font: { name: "Microsoft YaHei", bold: true, sz: 11 },
     alignment: { horizontal: "center", vertical: "center" }
   });
 
   for (let column = 0; column <= 3; column += 1) {
-    setCellStyle(1, column, {
-      font: { bold: true },
-      alignment: { horizontal: column === 2 ? "right" : "left", vertical: "center" }
+    setCellStyle(2, column, {
+      font: { name: "Microsoft YaHei", bold: true, sz: 11 },
+      fill: { fgColor: { rgb: "E5E7EB" } },
+      alignment: { horizontal: "center", vertical: "center" }
     });
   }
 
-  sectionRows.forEach((row) => {
+  totalRows.forEach((row) => {
     for (let column = 0; column <= 3; column += 1) {
       setCellStyle(row, column, {
-        font: { bold: true },
-        fill: { fgColor: { rgb: "F3F4F6" } }
+        font: { name: "Microsoft YaHei", bold: true, sz: 11 },
+        fill: { fgColor: { rgb: "FAFAFA" } }
       });
     }
   });
 
-  totalRows.forEach((row) => {
+  sectionRows.forEach((row) => {
     for (let column = 0; column <= 3; column += 1) {
-      setCellStyle(row, column, { font: { bold: true } });
+      setCellStyle(row, column, {
+        font: { name: "Microsoft YaHei", bold: true, sz: 11 },
+        fill: { fgColor: { rgb: "F3F4F6" } },
+        alignment: { horizontal: "left", vertical: "center" }
+      });
     }
   });
 
-  for (let row = 0; row < rows.length; row += 1) {
-    const amountCell = worksheet[XLSX.utils.encode_cell({ r: row, c: 2 })];
-    if (amountCell && typeof amountCell.v === "number") {
-      amountCell.z = rows[row][1] === "经营利润率" ? "0.00%" : "#,##0.00";
-    }
-
-    setCellStyle(row, 2, {
-      numFmt: rows[row][1] === "经营利润率" ? "0.00%" : "#,##0.00",
-      alignment: { horizontal: "right", vertical: "center" }
+  for (let row = 3; row < rows.length; row += 1) {
+    setCellStyle(row, 0, {
+      alignment: {
+        horizontal: sectionRows.includes(row) ? "left" : "center",
+        vertical: "center"
+      }
     });
-    setCellStyle(row, 3, {
-      alignment: { wrapText: true, vertical: "center" }
+    setCellStyle(row, 1, {
+      alignment: { horizontal: "left", vertical: "center" }
     });
   }
 
-  worksheet["!ref"] = XLSX.utils.encode_range({
-    s: { r: 0, c: 0 },
-    e: { r: rows.length - 1, c: 3 }
-  });
+  for (let row = 0; row < rows.length; row += 1) {
+    const project = rows[row][1];
+    const amountCell = worksheet[XLSX.utils.encode_cell({ r: row, c: 2 })];
+    if (amountCell && typeof amountCell.v === "number") {
+      amountCell.z = project === "经营利润率" ? "0.00%" : "#,##0.##";
+    }
+
+    setCellStyle(row, 2, {
+      numFmt: project === "经营利润率" ? "0.00%" : "#,##0.##",
+      alignment: { horizontal: "right", vertical: "center" }
+    });
+    setCellStyle(row, 3, {
+      alignment: { horizontal: "left", wrapText: true, vertical: "center" }
+    });
+  }
   XLSX.utils.book_append_sheet(workbook, worksheet, "经营汇总");
 }
 
@@ -851,25 +940,6 @@ export function ReportExportManager({
     cumulativeNetProfit: number;
   }) {
     const workbook = XLSX.utils.book_new();
-    const { costExpenses } = getOperationTotals(incomes, expenses);
-    const monthRows = buildMonthList(startMonth, endMonth).map((month) => {
-      const monthlyIncome = sumAmounts(
-        incomes.filter((income) => income.settlement_period.slice(0, 7) === month),
-        (income) => income.net_amount
-      );
-      const monthlyExpense = sumAmounts(
-        costExpenses.filter((expense) => expense.date.slice(0, 7) === month),
-        (expense) => expense.amount
-      );
-
-      return {
-        月份: month,
-        收入: monthlyIncome,
-        支出: monthlyExpense,
-        净利润: roundMoney(monthlyIncome - monthlyExpense)
-      };
-    });
-
     appendOperationSummarySheet({
       workbook,
       startMonth,
@@ -901,7 +971,6 @@ export function ReportExportManager({
         备注: expense.note ?? ""
       }))
     );
-    appendSheet(workbook, "月度汇总", monthRows);
 
     return workbook;
   }
