@@ -154,8 +154,9 @@ const moneyFormatter = new Intl.NumberFormat("zh-CN", {
   minimumFractionDigits: 0,
   maximumFractionDigits: 2
 });
-const operationReportHeaderFill = "E6F4F1";
-const operationReportSectionFill = "F0FAF7";
+const operationReportHeaderFill = "DDEBE8";
+const operationReportSectionFill = "EEF6F4";
+const operationReportTotalFill = "E6F4F1";
 
 function formatMoney(value: string | number | null | undefined) {
   return moneyFormatter.format(roundMoney(parseAmount(value)));
@@ -483,7 +484,7 @@ function appendOperationSummarySheet({
     for (let column = 0; column <= 3; column += 1) {
       setCellStyle(row, column, {
         font: { name: "Microsoft YaHei", bold: true, sz: 11 },
-        fill: { fgColor: { rgb: operationReportSectionFill } }
+        fill: { fgColor: { rgb: operationReportTotalFill } }
       });
     }
   });
@@ -621,7 +622,7 @@ function appendOperationDetailSheet({
     });
     setCellStyle(lastRow, column, {
       font: { name: "Microsoft YaHei", bold: true, sz: 11 },
-      fill: { fgColor: { rgb: operationReportSectionFill } },
+      fill: { fgColor: { rgb: operationReportTotalFill } },
       alignment: {
         horizontal: amountColumns.includes(column) ? "right" : "left",
         vertical: "center",
