@@ -150,6 +150,15 @@ function sumAmounts<T>(
   );
 }
 
+const moneyFormatter = new Intl.NumberFormat("zh-CN", {
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 2
+});
+
+function formatMoney(value: string | number | null | undefined) {
+  return moneyFormatter.format(roundMoney(parseAmount(value)));
+}
+
 function appendSheet(
   workbook: XLSX.WorkBook,
   sheetName: string,
@@ -270,23 +279,23 @@ function appendOperationSummarySheet({
     rows.push([
       index + 1,
       option.label,
-      sumByValue(
+      formatMoney(sumByValue(
         incomes,
         option.value,
         (income) => income.source,
         (income) => income.gross_amount
-      ),
+      )),
       ""
     ]);
   });
 
   rows.push(
-    [incomeSourceOptions.length + 1, "合计营业额", totalGrossIncome, ""],
-    [incomeSourceOptions.length + 2, "手续费", totalFee, ""],
+    [incomeSourceOptions.length + 1, "合计营业额", formatMoney(totalGrossIncome), ""],
+    [incomeSourceOptions.length + 2, "手续费", formatMoney(totalFee), ""],
     [
       incomeSourceOptions.length + 3,
       "本期实际收入",
-      totalNetIncome,
+      formatMoney(totalNetIncome),
       "收入净额 = 合计营业额 - 手续费"
     ],
     ["二、固定经营成本", null, null, null]
@@ -296,18 +305,18 @@ function appendOperationSummarySheet({
     rows.push([
       index + 1,
       getExpenseCategoryLabel(category),
-      sumByValue(
+      formatMoney(sumByValue(
         expenses,
         category,
         (expense) => expense.category,
         (expense) => expense.amount
-      ),
+      )),
       ""
     ]);
   });
 
   rows.push(
-    [fixedCostCategories.length + 1, "固定成本合计", fixedCostTotal, ""],
+    [fixedCostCategories.length + 1, "固定成本合计", formatMoney(fixedCostTotal), ""],
     ["三、日常经营费用", null, null, null]
   );
 
@@ -333,17 +342,17 @@ function appendOperationSummarySheet({
             (expense) => expense.amount
           );
 
-    rows.push([index + 1, getExpenseCategoryLabel(category), roundMoney(amount), ""]);
+    rows.push([index + 1, getExpenseCategoryLabel(category), formatMoney(amount), ""]);
   });
 
   rows.push(
-    [dailyExpenseCategories.length + 1, "日常费用合计", dailyExpenseTotal, ""],
+    [dailyExpenseCategories.length + 1, "日常费用合计", formatMoney(dailyExpenseTotal), ""],
     ["四、经营利润汇总", null, null, null],
-    ["", "本期实际收入", totalNetIncome, ""],
-    ["", "本期支出合计", totalExpense, "固定成本合计 + 日常费用合计"],
-    ["", "本期净利润", netProfit, "本期实际收入 - 本期支出合计"],
+    ["", "本期实际收入", formatMoney(totalNetIncome), ""],
+    ["", "本期支出合计", formatMoney(totalExpense), "固定成本合计 + 日常费用合计"],
+    ["", "本期净利润", formatMoney(netProfit), "本期实际收入 - 本期支出合计"],
     ["", "经营利润率", profitRate, totalNetIncome === 0 ? "本期实际收入为 0" : ""],
-    ["", "截至结束月份累计净利润", cumulativeNetProfit, `截至 ${endMonth} 统计`]
+    ["", "截至结束月份累计净利润", formatMoney(cumulativeNetProfit), `截至 ${endMonth} 统计`]
   );
 
   const worksheet = XLSX.utils.aoa_to_sheet(rows);
@@ -515,6 +524,89 @@ function appendOperationSummarySheet({
     });
   }
   XLSX.utils.book_append_sheet(workbook, worksheet, "经营汇总");
+}
+
+function appendOperationDetailSheet({
+  workbook,
+  sheetName,
+  rows,
+  columnWidths,
+  amountColumns,
+  wrapColumns
+}: {
+  workbook: XLSX.WorkBook;
+  sheetName: string;
+  rows: (string | number | null)[][];
+  columnWidths: number[];
+  amountColumns: number[];
+  wrapColumns: number[];
+}) {
+  const worksheet = XLSX.utils.aoa_to_sheet(rows);
+  const lastRow = rows.length - 1;
+  const lastColumn = rows[0].length - 1;
+  worksheet["!cols"] = columnWidths.map((wch) => ({ wch }));
+  worksheet["!rows"] = rows.map((_, index) => ({
+    hpt: index === 0 || index === lastRow ? 22 : 20
+  }));
+  worksheet["!ref"] = XLSX.utils.encode_range({
+    s: { r: 0, c: 0 },
+    e: { r: lastRow, c: lastColumn }
+  });
+
+  for (let row = 0; row <= lastRow; row += 1) {
+    for (let column = 0; column <= lastColumn; column += 1) {
+      const address = XLSX.utils.encode_cell({ r: row, c: column });
+      worksheet[address] ??= { t: "s", v: "" };
+    }
+  }
+
+  const thinBorder = {
+    top: { style: "thin", color: { rgb: "D9D9D9" } },
+    bottom: { style: "thin", color: { rgb: "D9D9D9" } },
+    left: { style: "thin", color: { rgb: "D9D9D9" } },
+    right: { style: "thin", color: { rgb: "D9D9D9" } }
+  };
+
+  const setCellStyle = (row: number, column: number, style: XLSX.CellObject["s"]) => {
+    const address = XLSX.utils.encode_cell({ r: row, c: column });
+    const cell = worksheet[address];
+    if (cell) {
+      cell.s = { ...(cell.s ?? {}), ...style };
+    }
+  };
+
+  for (let row = 0; row <= lastRow; row += 1) {
+    for (let column = 0; column <= lastColumn; column += 1) {
+      setCellStyle(row, column, {
+        font: { name: "Microsoft YaHei", sz: 11 },
+        border: thinBorder,
+        alignment: {
+          horizontal: amountColumns.includes(column) ? "right" : "left",
+          vertical: "center",
+          wrapText: wrapColumns.includes(column)
+        }
+      });
+    }
+  }
+
+  for (let column = 0; column <= lastColumn; column += 1) {
+    setCellStyle(0, column, {
+      font: { name: "Microsoft YaHei", bold: true, sz: 11 },
+      fill: { fgColor: { rgb: "E5E7EB" } },
+      alignment: { horizontal: "center", vertical: "center" }
+    });
+    setCellStyle(lastRow, column, {
+      font: { name: "Microsoft YaHei", bold: true, sz: 11 },
+      fill: { fgColor: { rgb: "FAFAFA" } },
+      alignment: {
+        horizontal: amountColumns.includes(column) ? "right" : "left",
+        vertical: "center",
+        wrapText: wrapColumns.includes(column)
+      }
+    });
+  }
+
+  XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
 }
 
 function downloadWorkbook(workbook: XLSX.WorkBook, fileName: string) {
@@ -940,6 +1032,11 @@ export function ReportExportManager({
     cumulativeNetProfit: number;
   }) {
     const workbook = XLSX.utils.book_new();
+    const incomeGrossTotal = sumAmounts(incomes, (income) => income.gross_amount);
+    const incomeFeeTotal = sumAmounts(incomes, (income) => income.fee_amount);
+    const incomeNetTotal = sumAmounts(incomes, (income) => income.net_amount);
+    const expenseTotal = sumAmounts(expenses, (expense) => expense.amount);
+
     appendOperationSummarySheet({
       workbook,
       startMonth,
@@ -948,29 +1045,43 @@ export function ReportExportManager({
       expenses,
       cumulativeNetProfit
     });
-    appendSheet(
+    appendOperationDetailSheet({
       workbook,
-      "收入明细",
-      incomes.map((income) => ({
-        日期: income.date,
-        来源: getIncomeSourceLabel(income.source),
-        金额: parseAmount(income.gross_amount),
-        手续费: parseAmount(income.fee_amount),
-        净收入: parseAmount(income.net_amount),
-        备注: income.note ?? ""
-      }))
-    );
-    appendSheet(
+      sheetName: "收入明细",
+      rows: [
+        ["日期", "来源", "金额", "手续费", "净收入", "备注"],
+        ...incomes.map((income) => [
+          income.date,
+          getIncomeSourceLabel(income.source),
+          formatMoney(income.gross_amount),
+          formatMoney(income.fee_amount),
+          formatMoney(income.net_amount),
+          income.note ?? ""
+        ]),
+        ["", "合计", formatMoney(incomeGrossTotal), formatMoney(incomeFeeTotal), formatMoney(incomeNetTotal), ""]
+      ],
+      columnWidths: [14, 18, 14, 14, 14, 30],
+      amountColumns: [2, 3, 4],
+      wrapColumns: [5]
+    });
+    appendOperationDetailSheet({
       workbook,
-      "支出明细",
-      expenses.map((expense) => ({
-        日期: expense.date,
-        类别: getExpenseCategoryLabel(expense.category),
-        收款方: expense.payee ?? "",
-        金额: parseAmount(expense.amount),
-        备注: expense.note ?? ""
-      }))
-    );
+      sheetName: "支出明细",
+      rows: [
+        ["日期", "类别", "收款方", "金额", "备注"],
+        ...expenses.map((expense) => [
+          expense.date,
+          getExpenseCategoryLabel(expense.category),
+          expense.payee ?? "",
+          formatMoney(expense.amount),
+          expense.note ?? ""
+        ]),
+        ["", "合计", "", formatMoney(expenseTotal), ""]
+      ],
+      columnWidths: [14, 18, 22, 14, 30],
+      amountColumns: [3],
+      wrapColumns: [4]
+    });
 
     return workbook;
   }
