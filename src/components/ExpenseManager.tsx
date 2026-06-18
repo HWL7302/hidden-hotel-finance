@@ -1,6 +1,13 @@
 ﻿"use client";
 
-import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
+import {
+  ChangeEvent,
+  FormEvent,
+  useEffect,
+  useMemo,
+  useRef,
+  useState
+} from "react";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase-client";
 import { DateInput } from "@/components/DateInputs";
@@ -42,6 +49,24 @@ type ExpenseFormState = {
   paymentMethod: string;
   includedInMonthlyCost: boolean;
   note: string;
+};
+
+type AiRecognitionResult = {
+  success: true;
+  record_type: "expense";
+  date: string | null;
+  amount: number | null;
+  payment_method: string | null;
+  category: string;
+  payee: string | null;
+  note: string | null;
+  confidence: number;
+  warnings: string[];
+};
+
+type AiRecognitionError = {
+  success: false;
+  error: string;
 };
 
 const emptyForm: ExpenseFormState = {
@@ -130,6 +155,11 @@ export function ExpenseManager({
   const [evidenceFile, setEvidenceFile] = useState<File | null>(null);
   const [fileInputKey, setFileInputKey] = useState(0);
   const [isPayeeManuallyEdited, setIsPayeeManuallyEdited] = useState(false);
+  const [isRecognizing, setIsRecognizing] = useState(false);
+  const [aiRecognition, setAiRecognition] = useState<AiRecognitionResult | null>(
+    null
+  );
+  const aiImageInputRef = useRef<HTMLInputElement>(null);
   const evidencePreviewUrl = useMemo(() => {
     if (!evidenceFile?.type.startsWith("image/")) {
       return "";
@@ -244,6 +274,7 @@ export function ExpenseManager({
     setEvidenceFile(null);
     setIsPayeeManuallyEdited(false);
     setFileInputKey((current) => current + 1);
+    setAiRecognition(null);
     setForm({ ...emptyForm, date: todayValue() });
   }
 
@@ -254,6 +285,64 @@ export function ExpenseManager({
   function clearEvidenceFile() {
     setEvidenceFile(null);
     setFileInputKey((current) => current + 1);
+    setAiRecognition(null);
+  }
+
+  async function handleAiImageChange(event: ChangeEvent<HTMLInputElement>) {
+    const image = event.target.files?.[0];
+    event.target.value = "";
+
+    if (!image) {
+      return;
+    }
+
+    setError("");
+    setNotice("");
+    setAiRecognition(null);
+    setEvidenceFile(image);
+    setFileInputKey((current) => current + 1);
+    setIsRecognizing(true);
+
+    const requestBody = new FormData();
+    requestBody.append("image", image);
+
+    try {
+      const response = await fetch("/api/ai/recognize-expense-voucher", {
+        method: "POST",
+        body: requestBody
+      });
+      const result = (await response.json()) as
+        | AiRecognitionResult
+        | AiRecognitionError;
+
+      if (!response.ok || !result.success) {
+        setError(
+          result.success
+            ? "无法识别凭证内容，请手动填写。"
+            : result.error
+        );
+        return;
+      }
+
+      setForm((current) => ({
+        ...current,
+        date: result.date ?? current.date,
+        amount: result.amount === null ? current.amount : String(result.amount),
+        paymentMethod: result.payment_method ?? current.paymentMethod,
+        category: result.category || current.category,
+        payee: result.payee ?? current.payee,
+        note: result.note ?? current.note
+      }));
+      if (result.payee) {
+        setIsPayeeManuallyEdited(true);
+      }
+      setAiRecognition(result);
+      setNotice("AI识别结果已填入，请核对并手动修改后再保存。");
+    } catch {
+      setError("AI识别请求失败，请检查网络后重试。所选凭证仍可随支出保存。");
+    } finally {
+      setIsRecognizing(false);
+    }
   }
 
   function startEdit(expense: ExpenseRecord) {
@@ -676,17 +765,36 @@ export function ExpenseManager({
               </button>
             ) : null}
           </div>
+          <input
+            ref={aiImageInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/gif"
+            onChange={handleAiImageChange}
+            className="hidden"
+            tabIndex={-1}
+          />
           <button
             type="button"
-            onClick={() =>
-              window.alert(
-                "该功能预留中，后续将支持上传截图后自动识别金额、日期和分类，人工确认后生成支出记录。"
-              )
-            }
-            className="mt-3 min-h-11 rounded-md border border-stone-300 px-4 py-2 text-sm font-medium text-stone-600 transition hover:border-pine hover:text-pine"
+            onClick={() => aiImageInputRef.current?.click()}
+            disabled={isRecognizing || isMonthLocked || !canManageExpenses}
+            className="mt-3 min-h-11 max-w-full rounded-md border border-stone-300 px-4 py-2 text-sm font-medium text-stone-600 transition hover:border-pine hover:text-pine disabled:cursor-not-allowed disabled:opacity-60"
           >
-            凭证识别录入（预留）
+            {isRecognizing ? "AI识别中..." : "AI识别凭证"}
           </button>
+          {aiRecognition ? (
+            <div className="mt-3 max-w-full rounded-md border border-emerald-200 bg-emerald-50 px-3 py-3 text-sm text-emerald-800">
+              <p>识别置信度：{Math.round(aiRecognition.confidence * 100)}%</p>
+              {aiRecognition.warnings.length > 0 ? (
+                <ul className="mt-2 list-disc space-y-1 pl-5">
+                  {aiRecognition.warnings.map((warning, index) => (
+                    <li key={`${warning}-${index}`} className="break-words">
+                      {warning}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
+          ) : null}
         </form>
 
         <div className="min-w-0 rounded-xl border border-slate-200 bg-white shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
