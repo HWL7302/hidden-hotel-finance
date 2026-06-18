@@ -31,7 +31,17 @@
 
 -- ============================================================================
 -- PLAN A: Remove business test transactions, keep users and role mappings.
+-- 方案 A：仅清理业务测试数据，保留账号和权限。
 -- ============================================================================
+-- 这是本次正式采用的方案，但本文件不会自动执行清理。
+-- 需要复制到 Supabase SQL Editor 的范围：从本方案的 begin; 开始，
+-- 到本方案的 rollback; 结束，不要复制方案 B。
+-- 默认运行只会显示 SAFE MODE，不会删除数据。
+-- 确认 store UUID、备份和待删数据均无误后，必须同时：
+--   1. 将 cleanup_enabled 改为 true；
+--   2. 将 confirmation_text 改为 CLEAR HIDDEN HOTEL TEST BUSINESS DATA；
+--   3. 将 target_store_id 改为已核对的 Hidden Hotel store UUID；
+--   4. 将本方案末尾的 ROLLBACK 改为 COMMIT，才会真正清理。
 -- Keeps:
 --   auth.users, profiles, investors, investment_records, stores,
 --   store_finance_settings, permission roles, fixed-admin protection, RLS.

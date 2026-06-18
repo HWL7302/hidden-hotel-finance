@@ -724,17 +724,6 @@ export function IncomeManager({
               </button>
             ) : null}
           </div>
-          <button
-            type="button"
-            onClick={() =>
-              window.alert(
-                "该功能预留中，后续将支持上传截图后自动识别金额、日期和来源，人工确认后生成收入记录。"
-              )
-            }
-            className="mt-3 min-h-11 rounded-md border border-stone-300 px-4 py-2 text-sm font-medium text-stone-600 transition hover:border-pine hover:text-pine"
-          >
-            凭证识别录入（预留）
-          </button>
         </form>
 
         <div className="min-w-0 rounded-xl border border-slate-200 bg-white shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
