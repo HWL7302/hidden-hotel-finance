@@ -243,7 +243,8 @@ function appendOperationSummarySheet({
     "salary",
     "utilities",
     "network",
-    "game_membership"
+    "game_membership",
+    "property_management"
   ];
   const dailyExpenseCategories = [
     "cleaning_supplies",

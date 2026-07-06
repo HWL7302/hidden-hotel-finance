@@ -8,6 +8,7 @@ create type public.expense_category as enum (
   'utilities',
   'network',
   'game_membership',
+  'property_management',
   'cleaning_supplies',
   'repair',
   'platform_promotion',
