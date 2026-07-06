@@ -84,6 +84,70 @@ export async function uploadEvidenceForRecord({
   return evidence.id as string;
 }
 
+export async function hasDuplicateEvidenceFile({
+  supabase,
+  file,
+  storeId
+}: {
+  supabase: SupabaseClient;
+  file: File;
+  storeId: string;
+}) {
+  const { data: candidates, error } = await supabase
+    .from("evidence_files")
+    .select("storage_bucket,storage_path")
+    .eq("store_id", storeId)
+    .eq("file_name", file.name);
+
+  if (error || !candidates?.length) {
+    return false;
+  }
+
+  for (const candidate of candidates) {
+    const { data } = await supabase.storage
+      .from(candidate.storage_bucket)
+      .download(candidate.storage_path);
+
+    if (data?.size === file.size) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+export async function deleteEvidenceFile(
+  supabase: SupabaseClient,
+  evidenceId: string
+) {
+  const { data: evidence, error: evidenceError } = await supabase
+    .from("evidence_files")
+    .select("storage_bucket,storage_path")
+    .eq("id", evidenceId)
+    .single();
+
+  if (evidenceError) {
+    throw evidenceError;
+  }
+
+  const { error: deleteError } = await supabase
+    .from("evidence_files")
+    .delete()
+    .eq("id", evidenceId);
+
+  if (deleteError) {
+    throw deleteError;
+  }
+
+  const { error: storageError } = await supabase.storage
+    .from(evidence.storage_bucket)
+    .remove([evidence.storage_path]);
+
+  if (storageError) {
+    throw storageError;
+  }
+}
+
 export async function createSignedEvidenceUrl(
   supabase: SupabaseClient,
   evidenceId: string

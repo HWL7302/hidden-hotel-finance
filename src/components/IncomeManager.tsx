@@ -8,6 +8,8 @@ import { MonthToolbar } from "@/components/MonthToolbar";
 import { isMonthlyClosingPermissionError } from "@/lib/month-lock";
 import {
   createSignedEvidenceUrl,
+  deleteEvidenceFile,
+  hasDuplicateEvidenceFile,
   uploadEvidenceForRecord
 } from "@/lib/evidence-client";
 import { logAuditEvent } from "@/lib/audit-client";
@@ -69,6 +71,10 @@ function getMonthRange(month: string) {
     start,
     end: nextMonth.toISOString().slice(0, 10)
   };
+}
+
+function getBusinessMonth(date: string) {
+  return date.slice(0, 7);
 }
 
 function formatMoney(value: string | number | null) {
@@ -376,6 +382,23 @@ export function IncomeManager({
       return;
     }
 
+    if (evidenceFile) {
+      const hasDuplicate = await hasDuplicateEvidenceFile({
+        supabase,
+        file: evidenceFile,
+        storeId: defaultStoreId
+      });
+
+      if (
+        hasDuplicate &&
+        !window.confirm(
+          "检测到可能重复的凭证文件，文件名和大小与已有凭证一致。是否仍然继续上传？"
+        )
+      ) {
+        return;
+      }
+    }
+
     setIsSaving(true);
 
     const payload = {
@@ -464,10 +487,17 @@ export function IncomeManager({
       }
     });
 
+    const businessMonth = getBusinessMonth(payload.date);
+    setHighlightedId(result.data.id);
     setIsSaving(false);
     setNotice(editingId ? "收入记录已更新。" : "收入记录已新增。");
     resetForm();
-    await loadIncomes();
+
+    if (businessMonth !== month) {
+      setMonth(businessMonth);
+    } else {
+      await loadIncomes();
+    }
   }
 
   async function handleDelete(income: IncomeRecord) {
@@ -482,7 +512,9 @@ export function IncomeManager({
     }
 
     const confirmed = window.confirm(
-      `确认删除 ${income.date} 的收入记录「${getIncomeSourceLabel(income.source)}」吗？`
+      income.evidence_file
+        ? `此记录已关联凭证。删除记录后，关联凭证也会一并删除，是否继续？\n\n收入记录：${income.date}「${getIncomeSourceLabel(income.source)}」`
+        : `确认删除 ${income.date} 的收入记录「${getIncomeSourceLabel(income.source)}」吗？`
     );
 
     if (!confirmed) {
@@ -500,6 +532,20 @@ export function IncomeManager({
     if (deleteError) {
       setError(deleteError.message);
       return;
+    }
+
+    if (income.evidence_file) {
+      try {
+        await deleteEvidenceFile(supabase, income.evidence_file);
+      } catch (evidenceDeleteError) {
+        setError(
+          evidenceDeleteError instanceof Error
+            ? `收入记录已删除，但关联凭证清理失败：${evidenceDeleteError.message}`
+            : "收入记录已删除，但关联凭证清理失败。"
+        );
+        await loadIncomes();
+        return;
+      }
     }
 
     await logAuditEvent({

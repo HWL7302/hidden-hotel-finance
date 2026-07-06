@@ -8,6 +8,8 @@ import { MonthToolbar } from "@/components/MonthToolbar";
 import { isMonthlyClosingPermissionError } from "@/lib/month-lock";
 import {
   createSignedEvidenceUrl,
+  deleteEvidenceFile,
+  hasDuplicateEvidenceFile,
   uploadEvidenceForRecord
 } from "@/lib/evidence-client";
 import { logAuditEvent } from "@/lib/audit-client";
@@ -83,6 +85,10 @@ function getMonthRange(month: string) {
     start,
     end: nextMonth.toISOString().slice(0, 10)
   };
+}
+
+function getBusinessMonth(date: string) {
+  return date.slice(0, 7);
 }
 
 function formatMoney(value: string | number | null) {
@@ -327,6 +333,23 @@ export function ExpenseManager({
       return;
     }
 
+    if (evidenceFile) {
+      const hasDuplicate = await hasDuplicateEvidenceFile({
+        supabase,
+        file: evidenceFile,
+        storeId: defaultStoreId
+      });
+
+      if (
+        hasDuplicate &&
+        !window.confirm(
+          "检测到可能重复的凭证文件，文件名和大小与已有凭证一致。是否仍然继续上传？"
+        )
+      ) {
+        return;
+      }
+    }
+
     setIsSaving(true);
 
     const payload = {
@@ -415,10 +438,17 @@ export function ExpenseManager({
       }
     });
 
+    const businessMonth = getBusinessMonth(payload.date);
+    setHighlightedId(result.data.id);
     setIsSaving(false);
     setNotice(editingId ? "支出记录已更新。" : "支出记录已新增。");
     resetForm();
-    await loadExpenses();
+
+    if (businessMonth !== month) {
+      setMonth(businessMonth);
+    } else {
+      await loadExpenses();
+    }
   }
 
   async function handleDelete(expense: ExpenseRecord) {
@@ -433,7 +463,9 @@ export function ExpenseManager({
     }
 
     const confirmed = window.confirm(
-      `确认删除 ${expense.date} 的支出记录「${getExpenseCategoryLabel(expense.category)}」吗？`
+      expense.evidence_file
+        ? `此记录已关联凭证。删除记录后，关联凭证也会一并删除，是否继续？\n\n支出记录：${expense.date}「${getExpenseCategoryLabel(expense.category)}」`
+        : `确认删除 ${expense.date} 的支出记录「${getExpenseCategoryLabel(expense.category)}」吗？`
     );
 
     if (!confirmed) {
@@ -451,6 +483,20 @@ export function ExpenseManager({
     if (deleteError) {
       setError(deleteError.message);
       return;
+    }
+
+    if (expense.evidence_file) {
+      try {
+        await deleteEvidenceFile(supabase, expense.evidence_file);
+      } catch (evidenceDeleteError) {
+        setError(
+          evidenceDeleteError instanceof Error
+            ? `支出记录已删除，但关联凭证清理失败：${evidenceDeleteError.message}`
+            : "支出记录已删除，但关联凭证清理失败。"
+        );
+        await loadExpenses();
+        return;
+      }
     }
 
     await logAuditEvent({

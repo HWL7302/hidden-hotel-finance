@@ -19,7 +19,13 @@ type EvidenceRecord = {
   storage_path: string;
   related_table: string | null;
   related_record_id: string | null;
+  related_record_month?: string;
   created_at: string;
+};
+
+type RelatedRecordDate = {
+  id: string;
+  date: string;
 };
 
 function getCurrentMonth() {
@@ -49,12 +55,13 @@ function getEvidenceCardTypeLabel(type: EvidenceType) {
   return `${getEvidenceTypeLabel(type)}凭证`;
 }
 
-function getRelatedRecordLink(record: EvidenceRecord, month: string) {
+function getRelatedRecordLink(record: EvidenceRecord, fallbackMonth: string) {
   if (!record.related_table || !record.related_record_id) {
     return null;
   }
 
-  const search = `?highlight=${record.related_record_id}&month=${month}`;
+  const relatedMonth = record.related_record_month ?? fallbackMonth;
+  const search = `?highlight=${record.related_record_id}&month=${relatedMonth}`;
 
   if (record.related_table === "incomes") {
     return { href: `/dashboard/income${search}`, label: "查看收入记录" };
@@ -87,6 +94,47 @@ export function EvidenceManager({
   const [isLoading, setIsLoading] = useState(false);
   const [isBatchDownloading, setIsBatchDownloading] = useState(false);
 
+  async function getRelatedRecordMonthMap(recordsToMap: EvidenceRecord[]) {
+    const incomeIds = recordsToMap
+      .filter(
+        (record) => record.related_table === "incomes" && record.related_record_id
+      )
+      .map((record) => record.related_record_id!);
+    const expenseIds = recordsToMap
+      .filter(
+        (record) => record.related_table === "expenses" && record.related_record_id
+      )
+      .map((record) => record.related_record_id!);
+    const monthMap = new Map<string, string>();
+
+    const [incomeResult, expenseResult] = await Promise.all([
+      incomeIds.length
+        ? supabase.from("incomes").select("id,date").in("id", incomeIds)
+        : Promise.resolve({ data: [], error: null }),
+      expenseIds.length
+        ? supabase.from("expenses").select("id,date").in("id", expenseIds)
+        : Promise.resolve({ data: [], error: null })
+    ]);
+
+    if (incomeResult.error) {
+      throw incomeResult.error;
+    }
+
+    if (expenseResult.error) {
+      throw expenseResult.error;
+    }
+
+    for (const income of (incomeResult.data ?? []) as RelatedRecordDate[]) {
+      monthMap.set(`incomes:${income.id}`, income.date.slice(0, 7));
+    }
+
+    for (const expense of (expenseResult.data ?? []) as RelatedRecordDate[]) {
+      monthMap.set(`expenses:${expense.id}`, expense.date.slice(0, 7));
+    }
+
+    return monthMap;
+  }
+
   async function loadRecords() {
     if (!defaultStoreId) {
       return;
@@ -116,8 +164,36 @@ export function EvidenceManager({
       return;
     }
 
-    setError("");
-    setRecords((data ?? []) as EvidenceRecord[]);
+    try {
+      const loadedRecords = (data ?? []) as EvidenceRecord[];
+      const relatedMonthMap = await getRelatedRecordMonthMap(loadedRecords);
+      const recordsWithRelatedMonths = loadedRecords
+        .map((record) => {
+          if (!record.related_table || !record.related_record_id) {
+            return record;
+          }
+
+          const relatedMonth = relatedMonthMap.get(
+            `${record.related_table}:${record.related_record_id}`
+          );
+
+          if (!relatedMonth) {
+            return null;
+          }
+
+          return { ...record, related_record_month: relatedMonth };
+        })
+        .filter((record): record is EvidenceRecord => Boolean(record));
+
+      setError("");
+      setRecords(recordsWithRelatedMonths);
+    } catch (relatedRecordError) {
+      setError(
+        relatedRecordError instanceof Error
+          ? relatedRecordError.message
+          : "关联记录读取失败。"
+      );
+    }
   }
 
   useEffect(() => {
