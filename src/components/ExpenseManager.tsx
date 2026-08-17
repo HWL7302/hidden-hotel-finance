@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase-client";
 import { DateInput } from "@/components/DateInputs";
 import { MonthToolbar } from "@/components/MonthToolbar";
@@ -80,11 +80,11 @@ function currentMonthValue() {
 
 function getMonthRange(month: string) {
   const start = `${month}-01`;
-  const nextMonth = new Date(`${start}T00:00:00`);
-  nextMonth.setMonth(nextMonth.getMonth() + 1);
+  const [year, monthNumber] = month.split("-").map(Number);
+  const nextMonthStart = new Date(Date.UTC(year, monthNumber, 1));
   return {
     start,
-    end: nextMonth.toISOString().slice(0, 10)
+    end: nextMonthStart.toISOString().slice(0, 10)
   };
 }
 
@@ -119,6 +119,8 @@ export function ExpenseManager({
 }) {
   const supabase = useMemo(() => createClient(), []);
   const canManageExpenses = canPerform(currentRole, "manageExpenses");
+  const pathname = usePathname();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const initialMonth = searchParams.get("month") ?? currentMonthValue();
   const initialHighlightedId = searchParams.get("highlight");
@@ -446,6 +448,12 @@ export function ExpenseManager({
     resetForm();
 
     if (businessMonth !== month) {
+      const nextSearchParams = new URLSearchParams(searchParams.toString());
+      nextSearchParams.set("month", businessMonth);
+      nextSearchParams.set("highlight", result.data.id);
+      router.replace(`${pathname}?${nextSearchParams.toString()}`, {
+        scroll: false
+      });
       setMonth(businessMonth);
     } else {
       await loadExpenses();
