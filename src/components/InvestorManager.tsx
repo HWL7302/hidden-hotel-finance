@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { DateInput } from "@/components/DateInputs";
 import { createClient } from "@/lib/supabase-client";
+import { formatDisplayAmount } from "@/lib/display-money";
 import {
   getInvestmentTypeLabel,
   investmentTypeOptions
@@ -81,12 +82,11 @@ const emptyForm: InvestorFormState = {
 };
 
 function formatMoney(value: number) {
-  const rounded = Math.round(value);
-  return `${rounded.toLocaleString("zh-CN")} RMB`;
+  return `${formatDisplayAmount(value)} RMB`;
 }
 
 function formatTableMoney(value: number) {
-  return Math.round(value).toLocaleString("zh-CN");
+  return formatDisplayAmount(value);
 }
 
 function formatPercent(value: number) {

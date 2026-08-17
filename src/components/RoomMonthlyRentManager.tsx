@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { DateInput, MonthInput } from "@/components/DateInputs";
 import { createClient } from "@/lib/supabase-client";
 import { logAuditEvent } from "@/lib/audit-client";
+import { formatDisplayAmount as formatMoney } from "@/lib/display-money";
 import type { AppRole } from "@/lib/permissions";
 
 type RoomStatus =
@@ -121,10 +122,6 @@ function parseAmount(value: string | number | null | undefined) {
 
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function formatMoney(value: string | number | null | undefined) {
-  return Math.round(parseAmount(value)).toLocaleString("zh-CN");
 }
 
 function isValidAmount(value: string) {

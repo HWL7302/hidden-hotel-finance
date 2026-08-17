@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { DateInput } from "@/components/DateInputs";
 import { MonthToolbar } from "@/components/MonthToolbar";
 import { createClient } from "@/lib/supabase-client";
+import { formatDisplayAmount } from "@/lib/display-money";
 import { isMonthlyClosingPermissionError } from "@/lib/month-lock";
 import { canPerform, type AppRole } from "@/lib/permissions";
 
@@ -95,11 +96,11 @@ function roundMoney(value: number) {
 }
 
 function formatMoney(value: number) {
-  return `${Math.round(value).toLocaleString("zh-CN")} RMB`;
+  return `${formatDisplayAmount(value)} RMB`;
 }
 
 function formatTableMoney(value: number) {
-  return Math.round(value).toLocaleString("zh-CN");
+  return formatDisplayAmount(value);
 }
 
 function formatPercentFromFraction(value: string | number) {

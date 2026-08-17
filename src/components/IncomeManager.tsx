@@ -3,6 +3,7 @@
 import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase-client";
+import { formatDisplayAmount as formatMoney } from "@/lib/display-money";
 import { DateInput, MonthInput } from "@/components/DateInputs";
 import { MonthToolbar } from "@/components/MonthToolbar";
 import { isMonthlyClosingPermissionError } from "@/lib/month-lock";
@@ -75,16 +76,6 @@ function getMonthRange(month: string) {
 
 function getBusinessMonth(date: string) {
   return date.slice(0, 7);
-}
-
-function formatMoney(value: string | number | null) {
-  if (value === null || value === "") {
-    return "-";
-  }
-
-  const text = String(value);
-  const [integerPart, decimalPart = "00"] = text.split(".");
-  return `${integerPart}.${decimalPart.padEnd(2, "0").slice(0, 2)}`;
 }
 
 function formatSettlementPeriod(value: string | null) {

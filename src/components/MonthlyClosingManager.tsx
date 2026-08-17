@@ -9,6 +9,7 @@ import {
 } from "@/lib/finance-options";
 import { MonthToolbar } from "@/components/MonthToolbar";
 import { createClient } from "@/lib/supabase-client";
+import { formatDisplayCents as formatMoney } from "@/lib/display-money";
 import { isMonthlyClosingPermissionError } from "@/lib/month-lock";
 import { canPerform, type AppRole } from "@/lib/permissions";
 
@@ -68,14 +69,6 @@ function amountToCents(value: string | number | null) {
     BigInt(integerPart || "0") * BigInt(100) +
     BigInt(decimalPart.padEnd(2, "0").slice(0, 2))
   );
-}
-
-function formatMoney(value: bigint) {
-  const isNegative = value < BigInt(0);
-  const absoluteValue = isNegative ? -value : value;
-  const integerPart = absoluteValue / BigInt(100);
-  const decimalPart = String(absoluteValue % BigInt(100)).padStart(2, "0");
-  return `${isNegative ? "-" : ""}${integerPart}.${decimalPart}`;
 }
 
 function centsToNumericString(value: bigint) {

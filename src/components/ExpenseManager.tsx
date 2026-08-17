@@ -3,6 +3,7 @@
 import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase-client";
+import { formatDisplayAmount as formatMoney } from "@/lib/display-money";
 import { DateInput } from "@/components/DateInputs";
 import { MonthToolbar } from "@/components/MonthToolbar";
 import { isMonthlyClosingPermissionError } from "@/lib/month-lock";
@@ -90,16 +91,6 @@ function getMonthRange(month: string) {
 
 function getBusinessMonth(date: string) {
   return date.slice(0, 7);
-}
-
-function formatMoney(value: string | number | null) {
-  if (value === null || value === "") {
-    return "-";
-  }
-
-  const text = String(value);
-  const [integerPart, decimalPart = "00"] = text.split(".");
-  return `${integerPart}.${decimalPart.padEnd(2, "0").slice(0, 2)}`;
 }
 
 function validateAmount(value: string) {
@@ -733,8 +724,8 @@ export function ExpenseManager({
           </div>
         </form>
 
-        <div className="min-w-0 rounded-xl border border-slate-200 bg-white shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
-          <div className="flex items-center justify-between border-b border-stone-200 px-5 py-4">
+        <div className="min-w-0 rounded-xl border border-slate-200 bg-white shadow-[0_8px_24px_rgba(15,23,42,0.04)] xl:flex xl:max-h-[calc(100vh-10rem)] xl:flex-col">
+          <div className="flex shrink-0 items-center justify-between border-b border-stone-200 px-5 py-4">
             <h3 className="text-lg font-semibold text-ink">支出列表</h3>
             <button
               type="button"
@@ -745,9 +736,9 @@ export function ExpenseManager({
             </button>
           </div>
 
-          <div className="hidden overflow-x-auto md:block">
+          <div className="hidden overflow-auto md:block xl:min-h-0 xl:flex-1">
             <table className="min-w-full divide-y divide-stone-200 text-sm">
-              <thead className="bg-slate-50 text-left text-slate-600">
+              <thead className="sticky top-0 z-10 bg-slate-50 text-left text-slate-600">
                 <tr>
                   <th className="px-4 py-3 font-semibold">日期</th>
                   <th className="px-4 py-3 font-semibold">分类</th>

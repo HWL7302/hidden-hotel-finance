@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { MonthToolbar } from "@/components/MonthToolbar";
 import { createClient } from "@/lib/supabase-client";
+import { formatDisplayCents } from "@/lib/display-money";
 import { type AppRole } from "@/lib/permissions";
 
 type IncomeRecord = {
@@ -83,12 +84,7 @@ function amountToCents(value: string | number | null) {
 }
 
 function formatMoney(value: bigint, withUnit = true) {
-  const isNegative = value < BigInt(0);
-  const absoluteValue = isNegative ? -value : value;
-  const integerPart = absoluteValue / BigInt(100);
-  const text = integerPart.toLocaleString("en-US");
-
-  return `${isNegative ? "-" : ""}${text}${withUnit ? " RMB" : ""}`;
+  return `${formatDisplayCents(value)}${withUnit ? " RMB" : ""}`;
 }
 
 function formatPercent(value: number) {
