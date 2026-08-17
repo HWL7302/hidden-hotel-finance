@@ -11,7 +11,7 @@ type IncomeRecord = {
 };
 
 type TrendIncomeRecord = IncomeRecord & {
-  settlement_period: string | null;
+  date: string;
 };
 
 type ExpenseRecord = {
@@ -63,12 +63,12 @@ function buildTrendMonths(selectedMonth: string) {
 
 function getMonthRange(month: string) {
   const start = `${month}-01`;
-  const nextMonth = new Date(`${start}T00:00:00`);
-  nextMonth.setMonth(nextMonth.getMonth() + 1);
+  const [year, monthNumber] = month.split("-").map(Number);
+  const nextMonthStart = new Date(Date.UTC(year, monthNumber, 1));
 
   return {
     start,
-    end: nextMonth.toISOString().slice(0, 10)
+    end: nextMonthStart.toISOString().slice(0, 10)
   };
 }
 
@@ -239,8 +239,8 @@ export function HomeDashboard({
         .from("incomes")
         .select("net_amount,evidence_file")
         .eq("store_id", defaultStoreId)
-        .gte("settlement_period", range.start)
-        .lt("settlement_period", range.end),
+        .gte("date", range.start)
+        .lt("date", range.end),
       supabase
         .from("expenses")
         .select("amount,included_in_monthly_cost,evidence_file")
@@ -259,10 +259,10 @@ export function HomeDashboard({
       paidDividendQuery ?? Promise.resolve({ data: [], error: null }),
       supabase
         .from("incomes")
-        .select("net_amount,evidence_file,settlement_period")
+        .select("net_amount,evidence_file,date")
         .eq("store_id", defaultStoreId)
-        .gte("settlement_period", trendRange.start)
-        .lt("settlement_period", trendRange.end),
+        .gte("date", trendRange.start)
+        .lt("date", trendRange.end),
       supabase
         .from("expenses")
         .select("amount,included_in_monthly_cost,evidence_file,date")
@@ -439,9 +439,7 @@ export function HomeDashboard({
     const byMonth = new Map(data.map((item) => [item.month, item]));
 
     for (const income of trendIncomes) {
-      const item = income.settlement_period
-        ? byMonth.get(income.settlement_period.slice(0, 7))
-        : null;
+      const item = byMonth.get(income.date.slice(0, 7));
 
       if (item) {
         item.income += amountToCents(income.net_amount);

@@ -73,11 +73,11 @@ function currentMonthValue() {
 
 function getMonthRange(month: string) {
   const start = `${month}-01`;
-  const nextMonth = new Date(`${start}T00:00:00`);
-  nextMonth.setMonth(nextMonth.getMonth() + 1);
+  const [year, monthNumber] = month.split("-").map(Number);
+  const nextMonthStart = new Date(Date.UTC(year, monthNumber, 1));
   return {
     start,
-    end: nextMonth.toISOString().slice(0, 10)
+    end: nextMonthStart.toISOString().slice(0, 10)
   };
 }
 
@@ -247,8 +247,8 @@ export function DividendRecordsManager({
               .from("incomes")
               .select("net_amount")
               .eq("store_id", defaultStoreId)
-              .gte("settlement_period", range.start)
-              .lt("settlement_period", range.end),
+              .gte("date", range.start)
+              .lt("date", range.end),
         isInvestorView
           ? Promise.resolve({ data: [], error: null })
           : supabase
@@ -661,8 +661,8 @@ export function DividendRecordsManager({
           .from("incomes")
           .select("net_amount")
           .eq("store_id", defaultStoreId)
-          .gte("settlement_period", range.start)
-          .lt("settlement_period", range.end),
+          .gte("date", range.start)
+          .lt("date", range.end),
         supabase
           .from("expenses")
           .select("amount,included_in_monthly_cost")
