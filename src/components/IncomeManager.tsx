@@ -178,8 +178,8 @@ export function IncomeManager({
       )
       .gte("date", range.start)
       .lt("date", range.end)
-      .order("date", { ascending: false })
-      .order("created_at", { ascending: false });
+      .order("date", { ascending: true })
+      .order("created_at", { ascending: true });
 
     if (defaultStoreId) {
       query = query.eq("store_id", defaultStoreId);
