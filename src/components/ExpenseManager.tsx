@@ -4,9 +4,8 @@ import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase-client";
 import { formatDisplayAmount as formatMoney } from "@/lib/display-money";
-import { DateInput } from "@/components/DateInputs";
+import { DateInput, MonthInput } from "@/components/DateInputs";
 import { ExpenseCategorySettingsModal } from "@/components/ExpenseCategorySettingsModal";
-import { MonthToolbar } from "@/components/MonthToolbar";
 import { isMonthlyClosingPermissionError } from "@/lib/month-lock";
 import {
   createSignedEvidenceUrl,
@@ -580,18 +579,15 @@ export function ExpenseManager({
         <div>
           <h2 className="text-2xl font-bold text-ink">支出管理</h2>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
-          {canManageExpenseCategories ? (
-            <button
-              type="button"
-              onClick={() => setIsCategorySettingsOpen(true)}
-              className="min-h-11 rounded-md border border-stone-300 bg-white px-4 py-2 text-sm font-medium text-ink transition hover:border-pine hover:text-pine"
-            >
-              支出分类设置
-            </button>
-          ) : null}
-          <MonthToolbar month={month} onMonthChange={setMonth} />
-        </div>
+        {canManageExpenseCategories ? (
+          <button
+            type="button"
+            onClick={() => setIsCategorySettingsOpen(true)}
+            className="min-h-11 rounded-md border border-stone-300 bg-white px-4 py-2 text-sm font-medium text-ink transition hover:border-pine hover:text-pine"
+          >
+            支出分类设置
+          </button>
+        ) : null}
       </div>
 
       {error ? (
@@ -792,7 +788,13 @@ export function ExpenseManager({
 
         <div className="min-w-0 rounded-xl border border-slate-200 bg-white shadow-[0_8px_24px_rgba(15,23,42,0.04)] xl:flex xl:max-h-[calc(100vh-10rem)] xl:flex-col">
           <div className="flex shrink-0 items-center justify-between border-b border-stone-200 px-5 py-4">
-            <h3 className="text-lg font-semibold text-ink">支出列表</h3>
+            <label className="flex flex-wrap items-center gap-3 text-sm font-medium text-ink">
+              <span className="whitespace-nowrap">显示月份：</span>
+              <MonthInput
+                value={month}
+                onChange={(event) => setMonth(event.target.value)}
+              />
+            </label>
             <button
               type="button"
               onClick={() => void loadExpenses()}
@@ -800,6 +802,9 @@ export function ExpenseManager({
             >
               刷新
             </button>
+          </div>
+          <div className="shrink-0 border-b border-stone-200 px-5 py-4">
+            <h3 className="text-lg font-semibold text-ink">支出列表</h3>
           </div>
 
           <div className="hidden overflow-auto md:block xl:min-h-0 xl:flex-1">
