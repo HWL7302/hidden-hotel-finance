@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase-client";
 import { formatDisplayAmount as formatMoney } from "@/lib/display-money";
 import { DateInput } from "@/components/DateInputs";
+import { ExpenseCategorySettingsModal } from "@/components/ExpenseCategorySettingsModal";
 import { MonthToolbar } from "@/components/MonthToolbar";
 import { isMonthlyClosingPermissionError } from "@/lib/month-lock";
 import {
@@ -15,11 +16,13 @@ import {
 } from "@/lib/evidence-client";
 import { logAuditEvent } from "@/lib/audit-client";
 import {
-  expenseCategoryOptions,
-  getExpenseCategoryLabel,
-  paymentMethodOptions
-} from "@/lib/finance-options";
-import { canPerform, type AppRole } from "@/lib/permissions";
+  fallbackExpenseCategories,
+  getExpenseCategoryDisplayName,
+  loadExpenseCategories,
+  type ExpenseCategoryRecord
+} from "@/lib/expense-categories";
+import { paymentMethodOptions } from "@/lib/finance-options";
+import { ADMIN_EMAIL, canPerform, type AppRole } from "@/lib/permissions";
 
 type ExpenseRecord = {
   id: string;
@@ -57,20 +60,6 @@ const emptyForm: ExpenseFormState = {
   note: ""
 };
 
-const payeeSuggestions: Record<string, string> = {
-  rent: "房东",
-  salary: "员工",
-  utilities: "水电费",
-  network: "网络服务商",
-  game_membership: "腾讯",
-  property_management: "物业管理",
-  cleaning_supplies: "日常用品供应商",
-  repair: "维修人员/维修公司",
-  platform_promotion: "平台推广",
-  renovation_equipment: "装修/设备供应商",
-  other: ""
-};
-
 function todayValue() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -99,17 +88,21 @@ function validateAmount(value: string) {
 
 export function ExpenseManager({
   currentUserId,
+  currentUserEmail,
   currentRole,
   defaultStoreId,
   storeLoadError
 }: {
   currentUserId: string;
+  currentUserEmail: string;
   currentRole: AppRole;
   defaultStoreId: string | null;
   storeLoadError: string;
 }) {
   const supabase = useMemo(() => createClient(), []);
   const canManageExpenses = canPerform(currentRole, "manageExpenses");
+  const canManageExpenseCategories =
+    currentUserEmail.trim().toLowerCase() === ADMIN_EMAIL;
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -120,6 +113,9 @@ export function ExpenseManager({
     initialHighlightedId
   );
   const [expenses, setExpenses] = useState<ExpenseRecord[]>([]);
+  const [expenseCategories, setExpenseCategories] = useState<
+    ExpenseCategoryRecord[]
+  >(fallbackExpenseCategories);
   const [form, setForm] = useState<ExpenseFormState>(emptyForm);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [error, setError] = useState(storeLoadError);
@@ -130,6 +126,7 @@ export function ExpenseManager({
   const [evidenceFile, setEvidenceFile] = useState<File | null>(null);
   const [fileInputKey, setFileInputKey] = useState(0);
   const [isPayeeManuallyEdited, setIsPayeeManuallyEdited] = useState(false);
+  const [isCategorySettingsOpen, setIsCategorySettingsOpen] = useState(false);
   const evidencePreviewUrl = useMemo(() => {
     if (!evidenceFile?.type.startsWith("image/")) {
       return "";
@@ -145,6 +142,39 @@ export function ExpenseManager({
       }
     };
   }, [evidencePreviewUrl]);
+
+  async function refreshExpenseCategories() {
+    try {
+      const categories = await loadExpenseCategories(supabase);
+      const nextCategories =
+        categories.length > 0 ? categories : fallbackExpenseCategories;
+      setExpenseCategories(nextCategories);
+      setForm((current) => {
+        if (
+          editingId ||
+          !current.category ||
+          nextCategories.some(
+            (category) =>
+              category.category_key === current.category && category.is_active
+          )
+        ) {
+          return current;
+        }
+
+        return {
+          ...current,
+          category: "",
+          payee: isPayeeManuallyEdited ? current.payee : ""
+        };
+      });
+    } catch (categoryError) {
+      setError(
+        categoryError instanceof Error
+          ? `支出分类读取失败：${categoryError.message}`
+          : "支出分类读取失败。"
+      );
+    }
+  }
 
   async function loadExpenses() {
     setError("");
@@ -199,6 +229,11 @@ export function ExpenseManager({
     void loadExpenses();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [month, defaultStoreId]);
+
+  useEffect(() => {
+    void refreshExpenseCategories();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     const nextHighlightedId = searchParams.get("highlight");
@@ -283,12 +318,16 @@ export function ExpenseManager({
   }
 
   function handleCategoryChange(category: string) {
+    const defaultPayee =
+      expenseCategories.find((item) => item.category_key === category)
+        ?.default_payee ?? "";
+
     setForm((current) => ({
       ...current,
       category,
       payee: isPayeeManuallyEdited
         ? current.payee
-        : payeeSuggestions[category] ?? ""
+        : defaultPayee
     }));
   }
 
@@ -421,7 +460,10 @@ export function ExpenseManager({
       action: editingId ? "update" : "create",
       targetType: "expense",
       targetId: result.data.id,
-      targetName: getExpenseCategoryLabel(payload.category),
+      targetName: getExpenseCategoryDisplayName(
+        expenseCategories,
+        payload.category
+      ),
       details: {
         date: payload.date,
         category: payload.category,
@@ -464,8 +506,8 @@ export function ExpenseManager({
 
     const confirmed = window.confirm(
       expense.evidence_file
-        ? `此记录已关联凭证。删除记录后，关联凭证也会一并删除，是否继续？\n\n支出记录：${expense.date}「${getExpenseCategoryLabel(expense.category)}」`
-        : `确认删除 ${expense.date} 的支出记录「${getExpenseCategoryLabel(expense.category)}」吗？`
+        ? `此记录已关联凭证。删除记录后，关联凭证也会一并删除，是否继续？\n\n支出记录：${expense.date}「${getExpenseCategoryDisplayName(expenseCategories, expense.category)}」`
+        : `确认删除 ${expense.date} 的支出记录「${getExpenseCategoryDisplayName(expenseCategories, expense.category)}」吗？`
     );
 
     if (!confirmed) {
@@ -506,7 +548,10 @@ export function ExpenseManager({
       action: "delete",
       targetType: "expense",
       targetId: expense.id,
-      targetName: getExpenseCategoryLabel(expense.category),
+      targetName: getExpenseCategoryDisplayName(
+        expenseCategories,
+        expense.category
+      ),
       details: { date: expense.date, amount: expense.amount }
     });
 
@@ -523,13 +568,30 @@ export function ExpenseManager({
     }
   }
 
+  const selectableExpenseCategories = expenseCategories.filter(
+    (category) =>
+      category.is_active ||
+      (Boolean(editingId) && category.category_key === form.category)
+  );
+
   return (
     <section>
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <h2 className="text-2xl font-bold text-ink">支出管理</h2>
         </div>
-        <MonthToolbar month={month} onMonthChange={setMonth} />
+        <div className="flex flex-wrap items-center gap-3">
+          {canManageExpenseCategories ? (
+            <button
+              type="button"
+              onClick={() => setIsCategorySettingsOpen(true)}
+              className="min-h-11 rounded-md border border-stone-300 bg-white px-4 py-2 text-sm font-medium text-ink transition hover:border-pine hover:text-pine"
+            >
+              支出分类设置
+            </button>
+          ) : null}
+          <MonthToolbar month={month} onMonthChange={setMonth} />
+        </div>
       </div>
 
       {error ? (
@@ -581,9 +643,13 @@ export function ExpenseManager({
                 className="mt-2 w-full min-w-0 rounded-md border border-stone-300 bg-white px-3 py-3 text-sm outline-none transition focus:border-pine focus:ring-2 focus:ring-pine/20 sm:py-2"
               >
                 <option value="">请选择分类</option>
-                {expenseCategoryOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
+                {selectableExpenseCategories.map((category) => (
+                  <option
+                    key={category.category_key}
+                    value={category.category_key}
+                  >
+                    {category.display_name}
+                    {!category.is_active ? "（已停用）" : ""}
                   </option>
                 ))}
               </select>
@@ -779,7 +845,10 @@ export function ExpenseManager({
                         {expense.date}
                       </td>
                       <td className="px-4 py-3 font-medium text-ink">
-                        {getExpenseCategoryLabel(expense.category)}
+                        {getExpenseCategoryDisplayName(
+                          expenseCategories,
+                          expense.category
+                        )}
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-stone-700">
                         {formatMoney(expense.amount)}
@@ -867,7 +936,10 @@ export function ExpenseManager({
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="text-sm font-semibold text-ink">
-                        {getExpenseCategoryLabel(expense.category)}
+                        {getExpenseCategoryDisplayName(
+                          expenseCategories,
+                          expense.category
+                        )}
                       </p>
                       <p className="mt-1 text-xs text-stone-500">{expense.date}</p>
                     </div>
@@ -941,6 +1013,13 @@ export function ExpenseManager({
           </div>
         </div>
       </div>
+      {isCategorySettingsOpen ? (
+        <ExpenseCategorySettingsModal
+          categories={expenseCategories}
+          onClose={() => setIsCategorySettingsOpen(false)}
+          onCategoriesChanged={refreshExpenseCategories}
+        />
+      ) : null}
     </section>
   );
 }

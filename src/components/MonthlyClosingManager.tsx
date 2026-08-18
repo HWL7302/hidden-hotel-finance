@@ -2,11 +2,14 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
-  expenseCategoryOptions,
-  getExpenseCategoryLabel,
   getIncomeSourceLabel,
   incomeSourceOptions
 } from "@/lib/finance-options";
+import {
+  fallbackExpenseCategories,
+  getExpenseCategoryDisplayName,
+  type ExpenseCategoryRecord
+} from "@/lib/expense-categories";
 import { MonthToolbar } from "@/components/MonthToolbar";
 import { createClient } from "@/lib/supabase-client";
 import { formatDisplayCents as formatMoney } from "@/lib/display-money";
@@ -95,12 +98,12 @@ function createIncomeSummaryMap() {
   );
 }
 
-function createExpenseSummaryMap() {
+function createExpenseSummaryMap(categories: ExpenseCategoryRecord[]) {
   return new Map(
-    expenseCategoryOptions.map((option) => [
-      option.value,
+    categories.map((category) => [
+      category.category_key,
       {
-        category: option.value,
+        category: category.category_key,
         amount: BigInt(0),
         recordCount: 0,
         evidenceCount: 0
@@ -123,6 +126,9 @@ export function MonthlyClosingManager({
   const [month, setMonth] = useState(currentMonthValue);
   const [incomes, setIncomes] = useState<IncomeRecord[]>([]);
   const [expenses, setExpenses] = useState<ExpenseRecord[]>([]);
+  const [expenseCategories, setExpenseCategories] = useState<
+    ExpenseCategoryRecord[]
+  >(fallbackExpenseCategories);
   const [isMonthLocked, setIsMonthLocked] = useState(false);
   const [isMonthLockPermissionMissing, setIsMonthLockPermissionMissing] =
     useState(false);
@@ -142,7 +148,8 @@ export function MonthlyClosingManager({
     setError("");
     setIsLoading(true);
     const range = getMonthRange(month);
-    const [incomeResult, expenseResult, closingResult] = await Promise.all([
+    const [incomeResult, expenseResult, closingResult, categoryResult] =
+      await Promise.all([
       supabase
         .from("incomes")
         .select("source,gross_amount,fee_amount,net_amount,evidence_file")
@@ -160,7 +167,14 @@ export function MonthlyClosingManager({
         .select("is_locked")
         .eq("store_id", defaultStoreId)
         .eq("month", range.start)
-        .maybeSingle()
+        .maybeSingle(),
+      supabase
+        .from("expense_categories")
+        .select(
+          "category_key,display_name,default_payee,is_active,sort_order,created_at,updated_at"
+        )
+        .order("sort_order", { ascending: true })
+        .order("created_at", { ascending: true })
     ]);
     setIsLoading(false);
 
@@ -174,6 +188,11 @@ export function MonthlyClosingManager({
       return;
     }
 
+    if (categoryResult.error) {
+      setError(categoryResult.error.message);
+      return;
+    }
+
     if (
       closingResult.error &&
       !isMonthlyClosingPermissionError(closingResult.error)
@@ -184,6 +203,11 @@ export function MonthlyClosingManager({
 
     setIncomes((incomeResult.data ?? []) as IncomeRecord[]);
     setExpenses((expenseResult.data ?? []) as ExpenseRecord[]);
+    setExpenseCategories(
+      categoryResult.data && categoryResult.data.length > 0
+        ? (categoryResult.data as ExpenseCategoryRecord[])
+        : fallbackExpenseCategories
+    );
     setIsMonthLockPermissionMissing(
       Boolean(
         closingResult.error &&
@@ -202,7 +226,7 @@ export function MonthlyClosingManager({
 
   const summary = useMemo(() => {
     const incomeMap = createIncomeSummaryMap();
-    const expenseMap = createExpenseSummaryMap();
+    const expenseMap = createExpenseSummaryMap(expenseCategories);
     let totalIncome = BigInt(0);
     let totalExpense = BigInt(0);
     let evidenceCount = 0;
@@ -259,7 +283,7 @@ export function MonthlyClosingManager({
         (item) => item.recordCount > 0
       ) as ExpenseSummary[]
     };
-  }, [expenses, incomes]);
+  }, [expenseCategories, expenses, incomes]);
 
   const cards = [
     { label: "本月收入合计", value: formatMoney(summary.totalIncome) },
@@ -415,7 +439,7 @@ export function MonthlyClosingManager({
           emptyText="当前月份暂无计入成本的支出记录。"
           isLoading={isLoading}
           rows={summary.expenseRows.map((item) => [
-            getExpenseCategoryLabel(item.category),
+            getExpenseCategoryDisplayName(expenseCategories, item.category),
             formatMoney(item.amount),
             String(item.recordCount),
             String(item.evidenceCount)

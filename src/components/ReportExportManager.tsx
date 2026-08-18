@@ -3,11 +3,14 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { MonthInput } from "@/components/DateInputs";
 import {
-  expenseCategoryOptions,
-  getExpenseCategoryLabel,
   getIncomeSourceLabel,
   incomeSourceOptions
 } from "@/lib/finance-options";
+import {
+  getExpenseCategoryDisplayName,
+  loadExpenseCategories,
+  type ExpenseCategoryRecord
+} from "@/lib/expense-categories";
 import type { AppRole } from "@/lib/permissions";
 import { createClient } from "@/lib/supabase-client";
 import * as XLSX from "xlsx-js-style";
@@ -229,6 +232,7 @@ function appendOperationSummarySheet({
   endMonth,
   incomes,
   expenses,
+  expenseCategories,
   cumulativeNetProfit
 }: {
   workbook: XLSX.WorkBook;
@@ -236,6 +240,7 @@ function appendOperationSummarySheet({
   endMonth: string;
   incomes: IncomeRecord[];
   expenses: ExpenseRecord[];
+  expenseCategories: ExpenseCategoryRecord[];
   cumulativeNetProfit: number;
 }) {
   const fixedCostCategories = [
@@ -254,8 +259,8 @@ function appendOperationSummarySheet({
   ];
   const dailyOtherCategories = new Set([
     ...dailyExpenseCategories,
-    ...expenseCategoryOptions
-      .map((option) => option.value)
+    ...expenseCategories
+      .map((category) => category.category_key)
       .filter((value) => !fixedCostCategories.includes(value))
   ]);
   const totalGrossIncome = sumAmounts(incomes, (income) => income.gross_amount);
@@ -308,7 +313,7 @@ function appendOperationSummarySheet({
   fixedCostCategories.forEach((category, index) => {
     rows.push([
       index + 1,
-      getExpenseCategoryLabel(category),
+      getExpenseCategoryDisplayName(expenseCategories, category),
       formatMoney(sumByValue(
         expenses,
         category,
@@ -346,7 +351,12 @@ function appendOperationSummarySheet({
             (expense) => expense.amount
           );
 
-    rows.push([index + 1, getExpenseCategoryLabel(category), formatMoney(amount), ""]);
+    rows.push([
+      index + 1,
+      getExpenseCategoryDisplayName(expenseCategories, category),
+      formatMoney(amount),
+      ""
+    ]);
   });
 
   rows.push(
@@ -1049,12 +1059,14 @@ export function ReportExportManager({
     endMonth,
     incomes,
     expenses,
+    expenseCategories,
     cumulativeNetProfit
   }: {
     startMonth: string;
     endMonth: string;
     incomes: IncomeRecord[];
     expenses: ExpenseRecord[];
+    expenseCategories: ExpenseCategoryRecord[];
     cumulativeNetProfit: number;
   }) {
     const workbook = XLSX.utils.book_new();
@@ -1069,6 +1081,7 @@ export function ReportExportManager({
       endMonth,
       incomes,
       expenses,
+      expenseCategories,
       cumulativeNetProfit
     });
     appendOperationDetailSheet({
@@ -1097,7 +1110,7 @@ export function ReportExportManager({
         ["日期", "类别", "金额", "收款方", "备注"],
         ...expenses.map((expense) => [
           expense.date,
-          getExpenseCategoryLabel(expense.category),
+          getExpenseCategoryDisplayName(expenseCategories, expense.category),
           formatMoney(expense.amount),
           expense.payee ?? "",
           expense.note ?? ""
@@ -1133,9 +1146,11 @@ export function ReportExportManager({
       const data = await fetchOperationData(operationStartMonth, operationEndMonth, {
         includeCumulativeNetProfit: true
       });
+      const expenseCategories = await loadExpenseCategories(supabase);
       const workbook = buildOperationWorkbook({
         startMonth: operationStartMonth,
         endMonth: operationEndMonth,
+        expenseCategories,
         ...data
       });
       downloadWorkbook(

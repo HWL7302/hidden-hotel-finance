@@ -12,6 +12,7 @@ export default async function ExpensesPage() {
   return (
     <ExpenseManager
       currentUserId={context.user.id}
+      currentUserEmail={context.userEmail}
       currentRole={context.currentRole}
       defaultStoreId={context.defaultStoreId}
       storeLoadError={context.storeLoadError}
