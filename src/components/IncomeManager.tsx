@@ -771,13 +771,16 @@ export function IncomeManager({
 
         <div className="min-w-0 rounded-xl border border-slate-200 bg-white shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
           <div className="flex items-center justify-between border-b border-stone-200 px-5 py-4">
-            <label className="flex flex-wrap items-center gap-3 text-sm font-medium text-ink">
-              <span className="whitespace-nowrap">显示月份：</span>
-              <MonthInput
-                value={month}
-                onChange={(event) => setMonth(event.target.value)}
-              />
-            </label>
+            <div className="flex flex-wrap items-center gap-4">
+              <h3 className="text-lg font-semibold text-ink">收入列表</h3>
+              <label className="flex flex-wrap items-center gap-3 text-sm font-medium text-ink">
+                <span className="whitespace-nowrap">显示月份：</span>
+                <MonthInput
+                  value={month}
+                  onChange={(event) => setMonth(event.target.value)}
+                />
+              </label>
+            </div>
             <button
               type="button"
               onClick={() => void loadIncomes()}
@@ -785,9 +788,6 @@ export function IncomeManager({
             >
               刷新
             </button>
-          </div>
-          <div className="border-b border-stone-200 px-5 py-4">
-            <h3 className="text-lg font-semibold text-ink">收入列表</h3>
           </div>
 
           <div className="hidden overflow-x-auto md:block">

@@ -788,13 +788,16 @@ export function ExpenseManager({
 
         <div className="min-w-0 rounded-xl border border-slate-200 bg-white shadow-[0_8px_24px_rgba(15,23,42,0.04)] xl:flex xl:max-h-[calc(100vh-10rem)] xl:flex-col">
           <div className="flex shrink-0 items-center justify-between border-b border-stone-200 px-5 py-4">
-            <label className="flex flex-wrap items-center gap-3 text-sm font-medium text-ink">
-              <span className="whitespace-nowrap">显示月份：</span>
-              <MonthInput
-                value={month}
-                onChange={(event) => setMonth(event.target.value)}
-              />
-            </label>
+            <div className="flex flex-wrap items-center gap-4">
+              <h3 className="text-lg font-semibold text-ink">支出列表</h3>
+              <label className="flex flex-wrap items-center gap-3 text-sm font-medium text-ink">
+                <span className="whitespace-nowrap">显示月份：</span>
+                <MonthInput
+                  value={month}
+                  onChange={(event) => setMonth(event.target.value)}
+                />
+              </label>
+            </div>
             <button
               type="button"
               onClick={() => void loadExpenses()}
@@ -802,9 +805,6 @@ export function ExpenseManager({
             >
               刷新
             </button>
-          </div>
-          <div className="shrink-0 border-b border-stone-200 px-5 py-4">
-            <h3 className="text-lg font-semibold text-ink">支出列表</h3>
           </div>
 
           <div className="hidden overflow-auto md:block xl:min-h-0 xl:flex-1">
